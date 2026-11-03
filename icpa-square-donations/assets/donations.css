@@ -1,0 +1,20 @@
+.icpa-donate-button {
+    display: inline-block;
+    padding: .85em 1.5em;
+    border: 2px solid transparent;
+    border-radius: .4rem;
+    font: inherit;
+    font-weight: 700;
+    line-height: 1.4;
+    text-align: center;
+    text-decoration: none !important;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+.icpa-donate-button:hover { text-decoration: underline !important; }
+.icpa-donate-button:focus-visible {
+    outline: 3px solid currentColor;
+    outline-offset: 4px;
+    box-shadow: 0 0 0 4px #fff;
+}

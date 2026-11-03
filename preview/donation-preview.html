@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Square donation button preview</title><style>
+*{box-sizing:border-box}body{margin:0;background:#f3f5f1;color:#20382e;font:16px/1.6 system-ui,sans-serif}main{max-width:1120px;margin:60px auto;padding:0 24px}header{margin-bottom:30px}.tag{font-size:12px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#547261}h1{font-size:clamp(28px,4vw,42px);letter-spacing:-.035em;margin:8px 0}p{margin:12px 0;color:#52645a}.layout{display:grid;grid-template-columns:320px 1fr;gap:28px}.controls,.sample{background:#fff;border:1px solid #dce3dc;border-radius:16px;padding:28px}.controls h2{font-size:19px;margin:0 0 22px}label{display:block;font-size:14px;font-weight:600;margin:18px 0 6px}input[type=text]{width:100%;font:inherit;padding:10px;border:1px solid #b7c5b9;border-radius:6px}input[type=color]{width:64px;height:42px;cursor:pointer}code{background:#f3f5f1;border-radius:5px;padding:4px 7px;font-size:13px}.hint{font-size:13px}.sample{padding:48px;align-self:start}.sample .brand{font-weight:750;font-size:14px;letter-spacing:.08em}.sample h2{font-size:36px;line-height:1.2;letter-spacing:-.03em;max-width:460px;margin:36px 0 18px}.sample p{max-width:480px}.sample .icpa-donate-button{margin:18px 0}.note{font-size:13px}.notice{min-height:50px;margin-top:18px;font-size:14px;color:#365a43}footer{font-size:13px;color:#65756b;margin-top:24px}@media(max-width:760px){main{margin:28px auto}.layout{grid-template-columns:1fr}.sample{padding:28px}.sample h2{font-size:30px}}
+.icpa-donate-button {
+    display: inline-block;
+    padding: .85em 1.5em;
+    border: 2px solid transparent;
+    border-radius: .4rem;
+    font: inherit;
+    font-weight: 700;
+    line-height: 1.4;
+    text-align: center;
+    text-decoration: none !important;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+.icpa-donate-button:hover { text-decoration: underline !important; }
+.icpa-donate-button:focus-visible {
+    outline: 3px solid currentColor;
+    outline-offset: 4px;
+    box-shadow: 0 0 0 4px #fff;
+}
+
+</style></head><body><main>
+<header><div class="tag">Interactive preview</div><h1>Your Square donation button</h1><p>Try the plugin’s button text and colour on an example donation page.</p></header>
+<div class="layout"><section class="controls" aria-labelledby="settings-title"><h2 id="settings-title">Button settings</h2><label for="label">Button text</label><input id="label" type="text" value="Donate"><label for="color">Button colour</label><input id="color" type="color" value="#146044"><p class="hint">Text colour adjusts automatically for contrast.</p><label>WordPress shortcode</label><code>[icpa_donate]</code><p class="hint">Save these choices under Settings → Square Donations on your WordPress website.</p></section>
+<section class="sample" aria-label="Example donation page"><div class="brand">ICPA · COMMUNITY SUPPORT</div><h2>Help make a difference in our community.</h2><p>Your support helps us continue our work. Choose to give through our secure Square checkout.</p><a href="#preview-message" id="donate" class="icpa-donate-button" style="background-color:#146044;color:#ffffff">Donate</a><p class="note">Payments are handled on Square’s hosted checkout.</p><div id="preview-message" class="notice" role="status" aria-live="polite"></div></section></div>
+<footer>Visual demo only. The surrounding page is an example; the plugin adds the button to your existing WordPress theme. This preview does not connect to Square or collect payments.</footer></main>
+<script>
+const label=document.getElementById('label'),color=document.getElementById('color'),button=document.getElementById('donate');
+function update(){button.textContent=label.value.trim()||'Donate';button.style.backgroundColor=color.value;const rgb=color.value.slice(1).match(/../g).map(v=>parseInt(v,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);const luminance=rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;button.style.color=luminance>.179?'#000000':'#ffffff'}
+label.addEventListener('input',update);color.addEventListener('input',update);button.addEventListener('click',e=>{e.preventDefault();document.getElementById('preview-message').textContent='Preview only. On your website, this button opens the Square payment link you saved in the plugin settings.'});
+</script></body></html>
