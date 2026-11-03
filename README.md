@@ -2,6 +2,8 @@
 
 ## Download and install
 
+Version 0.6.1 groups campaign management, causes, donations and settings under one **ICPA Donations** WordPress menu.
+
 [Download the ICPA Fundraising plugin ZIP](https://github.com/kh4dr94/ICPA_Donation/raw/refs/heads/main/icpa-fundraising.zip), then upload it in WordPress under **Plugins → Add New → Upload Plugin** and activate it. Upload this plugin ZIP, rather than GitHub's source-code ZIP of the whole repository.
 
 The repository now contains two WordPress plugins:

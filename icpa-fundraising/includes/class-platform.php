@@ -2,14 +2,13 @@
 defined( 'ABSPATH' ) || exit;
 
 final class ICPA_Platform {
-    const VERSION = '0.6.0';
+    const VERSION = '0.6.1';
     const OPTION = 'icpa_fundraising_settings';
     const TYPE = 'icpa_campaign';
 
     public static function init() {
         add_action( 'init', array( __CLASS__, 'register' ) );
         add_action( 'admin_init', array( __CLASS__, 'settings' ) );
-        add_action( 'admin_menu', array( __CLASS__, 'menu' ) );
         add_action( 'add_meta_boxes', array( __CLASS__, 'meta_boxes' ) );
         add_action( 'save_post_' . self::TYPE, array( __CLASS__, 'save_meta' ) );
         add_action( 'admin_post_icpa_submit_campaign', array( __CLASS__, 'submit' ) );
@@ -69,7 +68,8 @@ final class ICPA_Platform {
 
     public static function register() {
         register_post_type( self::TYPE, array(
-            'labels' => array( 'name' => 'Fundraising campaigns', 'singular_name' => 'Campaign', 'add_new_item' => 'Add campaign', 'edit_item' => 'Review campaign' ),
+            'labels' => array( 'name' => 'Fundraising campaigns', 'menu_name' => 'Campaigns', 'singular_name' => 'Campaign', 'add_new_item' => 'Add campaign', 'edit_item' => 'Review campaign' ),
+            'show_in_menu' => 'icpa-donations',
             'public' => true, 'show_in_rest' => true, 'has_archive' => true,
             'rewrite' => array( 'slug' => 'campaigns' ), 'menu_icon' => 'dashicons-heart',
             'supports' => array( 'title', 'editor', 'excerpt', 'thumbnail', 'author' ),
@@ -180,11 +180,6 @@ final class ICPA_Platform {
             $clean[$field] = 'page' === get_post_type( $id ) && 'publish' === get_post_status( $id ) ? $id : 0;
         }
         return $clean;
-    }
-
-    public static function menu() {
-        add_submenu_page( 'edit.php?post_type=' . self::TYPE, 'Platform settings', 'Platform settings', 'manage_options', 'icpa-platform', array( __CLASS__, 'settings_page' ) );
-        add_submenu_page( 'edit.php?post_type=' . self::TYPE, 'Donations', 'Donations', 'manage_options', 'icpa-donations', array( __CLASS__, 'donations_page' ) );
     }
 
     public static function admin_assets() {

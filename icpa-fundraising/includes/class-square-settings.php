@@ -12,6 +12,8 @@ final class ICPA_Square_Settings {
 
     public static function menu() {
         add_menu_page( 'ICPA Donations', 'ICPA Donations', 'manage_options', 'icpa-donations', array( 'ICPA_Platform', 'donations_page' ), 'dashicons-heart' );
+        add_submenu_page( 'icpa-donations', 'Donations', 'Donations', 'manage_options', 'icpa-donations', array( 'ICPA_Platform', 'donations_page' ) );
+        add_submenu_page( 'icpa-donations', 'Causes', 'Causes', 'manage_options', 'edit-tags.php?taxonomy=icpa_cause&post_type=' . ICPA_Platform::TYPE );
         add_submenu_page( 'icpa-donations', 'Donation settings', 'Settings', 'manage_options', 'icpa-general-settings', array( 'ICPA_Platform', 'settings_page' ) );
         add_submenu_page( 'icpa-donations', 'Square connections', 'Square connections', 'manage_options', 'icpa-square-settings', array( __CLASS__, 'page' ) );
     }
