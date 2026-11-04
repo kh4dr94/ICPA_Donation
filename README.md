@@ -2,7 +2,7 @@
 
 ## Download and install
 
-Version 0.7.0 adds embedded Square card entry for one-time donations when a matching Application ID is configured. Recurring gifts continue to use Square-hosted checkout. It groups campaign management, causes, donations and settings under one **ICPA Donations** WordPress menu.
+Version 0.7.1 adds live card-completeness feedback and clearly marked amount selection. Version 0.7.0 introduced embedded Square card entry for one-time donations when a matching Application ID is configured. Recurring gifts continue to use Square-hosted checkout. It groups campaign management, causes, donations and settings under one **ICPA Donations** WordPress menu.
 
 [Download the ICPA Fundraising plugin ZIP](https://github.com/kh4dr94/ICPA_Donation/raw/refs/heads/main/icpa-fundraising.zip), then upload it in WordPress under **Plugins → Add New → Upload Plugin** and activate it. Upload this plugin ZIP, rather than GitHub's source-code ZIP of the whole repository.
 

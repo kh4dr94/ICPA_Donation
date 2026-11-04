@@ -1,10 +1,10 @@
-# ICPA Fundraising — version 0.7.0
+# ICPA Fundraising — version 0.7.1
 
 An installable WordPress donation plugin with general custom-amount giving and optional fundraising campaigns, organisers and donor accounts. All donations go to **one ICPA Square account**. ICPA approves campaigns and manages distribution; organisers cannot enter a different payment recipient.
 
 This is an initial implementation. WordPress flows and payment logic have automated coverage, but your Square profiles still need real account credentials and end-to-end sandbox testing before live use.
 
-## Card entry on your donation page (0.7.0)
+## Card entry on your donation page (0.7.0+)
 
 Enter the **Application ID** for each environment under **ICPA Donations → Square connections**. Copy it from that environment's Square Developer Dashboard Credentials page, not its Application secret. Application IDs and location IDs are public SDK identifiers; access tokens and webhook signature keys remain server-side. The matching Application ID enables embedded card entry for both general and campaign one-time donations, using the existing shortcodes. Blank Application ID retains hosted one-time checkout for backwards compatibility. Recurring giving continues to use Square-hosted checkout.
 
@@ -13,6 +13,8 @@ The donation page must use HTTPS and allow Square's Web Payments SDK and secure 
 Start with Sandbox. Enter a custom amount and test card `4111 1111 1111 1111`, a future expiry, CVV `111` and postcode `2000` in the embedded form. Test successful and declined payments, campaign totals, refunds, webhook delivery and an interrupted connection before enabling Production. These account-specific tests have not been performed by the automated suite. For existing installs, upload the new ZIP and select **Replace current with uploaded**; saved credentials, campaigns and donation records are retained.
 
 During a payment retry, the form locks its amount/email and retains its single-use token and submission key; Square idempotency prevents a repeated request creating another payment. If a network error leaves confirmation uncertain, retry that same attempt or contact ICPA before starting another donation. A declined card requires reloading for a new attempt. The backend rate-limits requests, validates nonces/environment/amount/campaign status, and continues to process signed payment/refund webhooks. No OAuth redirect or Application secret is required.
+
+Version 0.7.1 adds a live checkmark when Square reports complete card details, inline incomplete/invalid feedback, and contrasting selected amount buttons with checkmarks. This feedback indicates input completeness, not card approval or successful payment. First and last name remain required.
 
 ## Included
 

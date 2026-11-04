@@ -12,14 +12,24 @@ const fs = require('fs');
                 requests.push(new URLSearchParams(route.request().postData()));
                 return route.fulfill({status: fail ? 502 : 200, contentType:'application/json', body: JSON.stringify(fail ? {success:false,data:{message:'Retry this attempt <script>unsafe</script>'}} : {success:true,data:{status:'completed',message:'Thank you. Your donation has been received.'}})});
             }
-            return route.fulfill({contentType:'text/html', body:html});
+            return route.fulfill({contentType:'text/html', body:'<meta charset="utf-8"><style>' + fs.readFileSync('icpa-fundraising/assets/platform.css','utf8') + '</style><style>button:hover{color:white!important}</style><div class="icpa-platform">' + html + '</div>'});
         });
         await page.goto('https://donation.example.test');
         await page.evaluate(() => {
-            window.tokenizations = [];
-            window.Square = { payments: () => ({card: async () => ({attach: async selector => {document.querySelector(selector).textContent='Secure card iframe (test double)';}, tokenize: async details => {window.tokenizations.push(details); return {status:'OK',token:'cnon:browser-fixture'};}})})};
+            window.tokenizations = []; window.cardListeners = {};
+            window.Square = { payments: () => ({card: async () => ({addEventListener: (name, callback) => {window.cardListeners[name] = callback;}, attach: async selector => {document.querySelector(selector).textContent='Secure card iframe (test double)';}, tokenize: async details => {window.tokenizations.push(details); return {status:'OK',token:'cnon:browser-fixture'};}})})};
         });
         await page.addScriptTag({content:script});
+        await page.addScriptTag({content:fs.readFileSync('icpa-fundraising/assets/platform.js', 'utf8')});
+        await page.evaluate(() => window.cardListeners.inputEvent({detail:{currentState:{isEmpty:false,isCompletelyValid:true,isPotentiallyValid:true}}}));
+        if (!(await page.locator('.icpa-card-validity').textContent()).includes('✓ Card details complete')) throw Error('Complete card indicator missing');
+        await page.evaluate(() => window.cardListeners.inputEvent({detail:{currentState:{isEmpty:false,isCompletelyValid:false,isPotentiallyValid:false}}}));
+        if (!(await page.locator('.icpa-card-validity').textContent()).includes('Check your card details')) throw Error('Invalid card indicator missing');
+        await page.evaluate(() => window.cardListeners.inputEvent({detail:{currentState:{isEmpty:true,isCompletelyValid:false}}}));
+        if (!(await page.locator('.icpa-card-validity').isHidden())) throw Error('Empty card indicator should be hidden');
+        await page.locator('.icpa-amounts button').first().click();
+        const selection = await page.locator('.icpa-amounts button').first().evaluate(button => ({pressed:button.getAttribute('aria-pressed'), color:getComputedStyle(button).color, background:getComputedStyle(button).backgroundColor, check:getComputedStyle(button,'::before').content}));
+        if (selection.pressed !== 'true' || selection.color !== 'rgb(40, 28, 70)' || selection.background !== 'rgb(255, 242, 197)' || !selection.check.includes('✓')) throw Error('Selected amount must remain readable under theme hover styles: ' + JSON.stringify(selection));
         await page.locator('[name=amount]').fill('25.50');
         await page.locator('[name=first_name]').fill('Test');
         await page.locator('[name=last_name]').fill('Donor');
@@ -41,6 +51,6 @@ const fs = require('fs');
         await page.addScriptTag({content:script});
         await page.waitForFunction(() => document.querySelector('.icpa-card-status').textContent.includes('unavailable'));
         if (!(await page.getByRole('button',{name:'Donate',exact:true}).isDisabled())) throw Error('SDK load failure must disable payment');
-        console.log('PASS: embedded card browser flow, buyer verification details, safe retry token reuse, locked amount, success state, escaped errors and SDK failure (SDK mocked)');
+        console.log('PASS: live card-completeness feedback, readable selected amount under theme overrides, embedded card browser flow, buyer verification details, safe retry token reuse, locked amount, success state, escaped errors and SDK failure (SDK mocked)');
     } finally { await browser.close(); }
 })().catch(error => {console.error(error);process.exit(1);});

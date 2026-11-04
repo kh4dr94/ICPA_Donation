@@ -3,6 +3,7 @@
     document.querySelectorAll('form[data-card-payment]').forEach(async function (form) {
         const button = form.querySelector('button[type="submit"]');
         const status = form.querySelector('.icpa-card-status');
+        const validity = form.querySelector('.icpa-card-validity');
         const fields = () => Array.from(form.querySelectorAll('input:not([type="hidden"]), .icpa-amounts button'));
         let card, busy = false, token = null, finished = false;
         // Stop native form navigation even when Square fails to load.
@@ -51,6 +52,14 @@
             if (!window.Square) { throw new Error('The secure card form could not load. Refresh the page or contact ICPA.'); }
             const payments = window.Square.payments(form.dataset.appId, form.dataset.locationId);
             card = await payments.card();
+            card.addEventListener('inputEvent', function (event) {
+                if (!validity || busy || finished) { return; }
+                const state = event.detail && event.detail.currentState;
+                if (!state) { return; }
+                validity.hidden = state.isEmpty === true;
+                validity.dataset.state = state.isCompletelyValid ? 'complete' : (state.isPotentiallyValid === false ? 'invalid' : 'incomplete');
+                validity.textContent = state.isCompletelyValid ? '✓ Card details complete' : (state.isPotentiallyValid === false ? 'Check your card details' : 'Enter the remaining card details');
+            });
             await card.attach('#' + form.querySelector('.icpa-card-container').id);
             status.textContent = '';
             button.disabled = false;

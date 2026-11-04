@@ -68,6 +68,7 @@ final class ICPA_Views {
             <label for="<?php echo esc_attr( $id ); ?>-last">Last name</label><input id="<?php echo esc_attr( $id ); ?>-last" name="last_name" autocomplete="family-name" maxlength="100" required>
             <label for="<?php echo esc_attr( $id ); ?>-email">Email</label><input id="<?php echo esc_attr( $id ); ?>-email" type="email" name="email" autocomplete="email" maxlength="254" required>
             <span>Card details</span><div id="<?php echo esc_attr( $id ); ?>-card" class="icpa-card-container"></div>
+            <p class="icpa-card-validity icpa-small" role="status" aria-live="polite" hidden></p>
             <p class="icpa-card-status icpa-small" role="status" aria-live="polite">Loading secure card form…</p><noscript>JavaScript is required for secure card payments.</noscript>
             <?php } ?>
             <button class="icpa-btn" type="submit"<?php if ( $embedded ) { ?> disabled<?php } ?>>Donate</button>
