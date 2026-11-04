@@ -10,6 +10,7 @@ final class ICPA_Recurring {
         add_action( 'admin_menu', array( __CLASS__, 'menu' ) );
         add_action( 'admin_post_icpa_recurring_settings', array( __CLASS__, 'settings_handler' ) );
         add_action( 'admin_post_icpa_refresh_plans', array( __CLASS__, 'refresh_handler' ) );
+        add_action( 'admin_post_icpa_create_recurring_plan', array( __CLASS__, 'create_handler' ) );
         add_action( 'admin_post_icpa_recurring_plan', array( __CLASS__, 'plan_handler' ) );
     }
 
@@ -78,7 +79,60 @@ final class ICPA_Recurring {
         return true;
     }
 
-    public static function save_plan( $mode, $cadence, $id ) {
+    private static function valid_catalog_id( $id ) {
+        return is_string( $id ) && (bool) preg_match( '/\A[A-Za-z0-9_-]{1,192}\z/', $id );
+    }
+
+    private static function store_creation( $key, $state ) {
+        if ( ! update_option( $key, $state, false ) && get_option( $key ) !== $state ) { return new WP_Error( 'creation_storage', 'Square created the object but its reference could not be saved. Retry the same amount and interval safely.' ); }
+        return true;
+    }
+
+    /** Stable catalog idempotency keys and saved stages resume safely after failed checkout creation. */
+    public static function create_plan( $mode, $cadence, $amount_string ) {
+        if ( ! current_user_can( 'manage_options' ) ) { return new WP_Error( 'forbidden', 'Administrator access required.' ); }
+        if ( ! in_array( $mode, array( 'sandbox', 'production' ), true ) || ! is_string( $cadence ) || ! isset( self::cadences()[$cadence] ) ) { return new WP_Error( 'invalid_option', 'Choose a valid environment and interval.' ); }
+        $amount = ICPA_Platform::cents( $amount_string ); $site = ICPA_Platform::options();
+        if ( ! $amount || $amount < $site['minimum_amount'] || $amount > $site['maximum_amount'] ) { return new WP_Error( 'invalid_amount', 'Enter a recurring amount within the site donation limits.' ); }
+        if ( ! ICPA_Square::ready( $mode ) ) { return new WP_Error( 'profile_missing', 'Save and test this Square environment’s connection first.' ); }
+        $fingerprint = self::fingerprint( $mode );
+        $identity = wp_json_encode( array( 'ICPA recurring creation v1', $fingerprint, $cadence, $amount, $site['currency'] ) );
+        $state_key = 'icpa_recurring_created_' . hash( 'sha256', $identity );
+        $state = get_option( $state_key, array() );
+        if ( ! is_array( $state ) ) { return new WP_Error( 'creation_invalid', 'The saved plan creation reference is invalid. Contact ICPA support.' ); }
+        $location = ICPA_Square_Settings::profile( $mode )['location_id'];
+        $name = 'ICPA ' . self::cadences()[$cadence] . ' giving — ' . $site['currency'] . ' ' . number_format( $amount / 100, 2, '.', '' );
+        if ( empty( $state['parent_id'] ) ) {
+            $result = ICPA_Square::api( 'POST', '/v2/catalog/object', array( 'idempotency_key' => hash( 'sha256', 'parent|' . $identity ), 'object' => array( 'type' => 'SUBSCRIPTION_PLAN', 'id' => '#icpa-giving-plan', 'present_at_all_locations' => false, 'present_at_location_ids' => array( $location ), 'subscription_plan_data' => array( 'name' => $name ) ) ), $mode );
+            if ( is_wp_error( $result ) ) { return $result; }
+            $object = isset( $result['catalog_object'] ) && is_array( $result['catalog_object'] ) ? $result['catalog_object'] : array();
+            if ( ! isset( $object['type'], $object['id'] ) || 'SUBSCRIPTION_PLAN' !== $object['type'] || ! self::valid_catalog_id( $object['id'] ) || ! empty( $object['is_deleted'] ) ) { return new WP_Error( 'invalid_parent', 'Square did not confirm the new subscription plan.' ); }
+            $state['parent_id'] = $object['id'];
+            $saved = self::store_creation( $state_key, $state ); if ( is_wp_error( $saved ) ) { return $saved; }
+        }
+        if ( ! self::valid_catalog_id( $state['parent_id'] ) ) { return new WP_Error( 'invalid_parent', 'The saved Square plan reference is invalid.' ); }
+        if ( empty( $state['variation_id'] ) ) {
+            $result = ICPA_Square::api( 'POST', '/v2/catalog/object', array( 'idempotency_key' => hash( 'sha256', 'variation|' . $identity ), 'object' => array( 'type' => 'SUBSCRIPTION_PLAN_VARIATION', 'id' => '#icpa-giving-variation', 'present_at_all_locations' => false, 'present_at_location_ids' => array( $location ), 'subscription_plan_variation_data' => array( 'name' => $name, 'subscription_plan_id' => $state['parent_id'], 'can_prorate' => false, 'phases' => array( array( 'ordinal' => 0, 'cadence' => $cadence, 'pricing' => array( 'type' => 'STATIC', 'price_money' => array( 'amount' => $amount, 'currency' => $site['currency'] ) ) ) ) ) ) ), $mode );
+            if ( is_wp_error( $result ) ) { return $result; }
+            $object = isset( $result['catalog_object'] ) && is_array( $result['catalog_object'] ) ? $result['catalog_object'] : array();
+            $plan = self::parse_plan( $object, $mode );
+            if ( is_wp_error( $plan ) ) { return $plan; }
+            if ( ! self::valid_catalog_id( $plan['id'] ) || $plan['amount'] !== $amount || $plan['cadence'] !== $cadence || ! isset( $object['subscription_plan_variation_data']['subscription_plan_id'] ) || $object['subscription_plan_variation_data']['subscription_plan_id'] !== $state['parent_id'] ) { return new WP_Error( 'invalid_created_plan', 'Square did not return the requested amount, interval and parent plan. Nothing was published.' ); }
+            $state['variation_id'] = $plan['id'];
+            $saved = self::store_creation( $state_key, $state ); if ( is_wp_error( $saved ) ) { return $saved; }
+        }
+        if ( ! self::valid_catalog_id( $state['variation_id'] ) ) { return new WP_Error( 'invalid_plan', 'The saved Square plan variation reference is invalid.' ); }
+        $saved = self::save_plan( $mode, $cadence, $state['variation_id'], $amount );
+        if ( is_wp_error( $saved ) ) { return $saved; }
+        $all = get_option( self::PLANS, array() );
+        if ( ! is_array( $all ) ) { $all = array(); }
+        if ( ! isset( $all[$mode]['fingerprint'] ) || ! hash_equals( $all[$mode]['fingerprint'], $fingerprint ) ) { $all[$mode] = array( 'fingerprint' => $fingerprint, 'plans' => array(), 'cursor' => '' ); }
+        $all[$mode]['plans'][$state['variation_id']] = self::options()['links'][$mode][$cadence];
+        update_option( self::PLANS, $all, false );
+        return true;
+    }
+
+    public static function save_plan( $mode, $cadence, $id, $expected_amount = null ) {
         if ( ! current_user_can( 'manage_options' ) ) { return new WP_Error( 'forbidden', 'Administrator access required.' ); }
         if ( ! in_array( $mode, array( 'sandbox', 'production' ), true ) || ! is_string( $cadence ) || ! isset( self::cadences()[$cadence] ) || ! is_string( $id ) || ! preg_match( '/\A[A-Za-z0-9_-]{0,192}\z/', $id ) ) { return new WP_Error( 'invalid_option', 'Invalid environment, interval or plan ID.' ); }
         $o = self::options();
@@ -89,6 +143,7 @@ final class ICPA_Recurring {
         $plan = self::parse_plan( isset( $response['object'] ) ? $response['object'] : array(), $mode );
         if ( is_wp_error( $plan ) ) { return $plan; }
         if ( $plan['id'] !== $id || $plan['cadence'] !== $cadence ) { return new WP_Error( 'wrong_interval', 'The Square plan must match the selected interval.' ); }
+        if ( null !== $expected_amount && $plan['amount'] !== $expected_amount ) { return new WP_Error( 'created_price_changed', 'This Square plan price changed. The requested amount was not published; use a new amount or manage the changed plan in Square.' ); }
         $fingerprint = self::fingerprint( $mode );
         $saved = isset( $o['links'][$mode][$cadence] ) ? $o['links'][$mode][$cadence] : array();
         if ( isset( $saved['id'], $saved['amount'], $saved['version'], $saved['fingerprint'], $saved['url'] ) && $saved['id'] === $id && $saved['amount'] === $plan['amount'] && $saved['version'] === $plan['version'] && hash_equals( $saved['fingerprint'], $fingerprint ) && ICPA_Square::valid_checkout_url( $saved['url'] ) ) { return true; }
@@ -100,7 +155,7 @@ final class ICPA_Recurring {
         if ( ! isset( $result['payment_link']['checkout_options']['subscription_plan_id'] ) || $result['payment_link']['checkout_options']['subscription_plan_id'] !== $id ) { return new WP_Error( 'subscription_unconfirmed', 'Square did not confirm the requested subscription plan. This option has not been published.' ); }
         $plan['url'] = $url; $plan['fingerprint'] = $fingerprint;
         $o['links'][$mode][$cadence] = $plan;
-        update_option( self::OPTION, $o, false );
+        if ( ! update_option( self::OPTION, $o, false ) && get_option( self::OPTION ) !== $o ) { return new WP_Error( 'recurring_storage', 'The recurring option could not be saved. Retry the same amount and interval safely.' ); }
         return true;
     }
 
@@ -163,6 +218,13 @@ final class ICPA_Recurring {
         ICPA_Security::require_post();
         check_admin_referer( 'icpa_refresh_plans' ); self::finish( self::refresh( isset( $_POST['environment'] ) && is_string( $_POST['environment'] ) ? sanitize_key( $_POST['environment'] ) : '', ! empty( $_POST['more'] ) ) );
     }
+    public static function create_handler() {
+        if ( ! current_user_can( 'manage_options' ) ) { wp_die( 'Administrator access required.', '', array( 'response' => 403 ) ); }
+        ICPA_Security::require_post( 8192 );
+        check_admin_referer( 'icpa_create_recurring_plan' );
+        self::finish( self::create_plan( isset( $_POST['environment'] ) ? wp_unslash( $_POST['environment'] ) : '', isset( $_POST['cadence'] ) ? wp_unslash( $_POST['cadence'] ) : '', isset( $_POST['amount'] ) ? wp_unslash( $_POST['amount'] ) : '' ) );
+    }
+
     public static function plan_handler() {
         if ( ! current_user_can( 'manage_options' ) ) { wp_die( 'Administrator access required.', '', array( 'response' => 403 ) ); }
         ICPA_Security::require_post();
@@ -172,7 +234,7 @@ final class ICPA_Recurring {
     public static function page() {
         if ( ! current_user_can( 'manage_options' ) ) { return; }
         $o = self::options(); $cache = get_option( self::PLANS, array() );
-        echo '<div class="wrap"><h1>Recurring giving</h1><p>Configure recurring options for general donations. Campaign checkout remains one-time. Create fixed-price subscription plans in Square, load them here, then choose which intervals to offer.</p><div class="notice notice-info"><p>Square manages recurring charges, receipts, cancellations and subscription records. Renewals are not synchronised into this plugin’s one-time donation ledger or campaign totals. Disabling an option removes it from this plugin; deactivate checkout links or cancel existing subscriptions in Square.</p></div><form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="icpa_recurring_settings">';
+        echo '<div class="wrap"><h1>Recurring giving</h1><p>Configure recurring options for general donations. Campaign checkout remains one-time. Create fixed-price subscription plans here in WordPress, or select existing Square plans below. Choose which intervals to offer.</p><div class="notice notice-info"><p>Square manages recurring charges, receipts, cancellations and subscription records. Renewals are not synchronised into this plugin’s one-time donation ledger or campaign totals. Disabling an option removes it from this plugin; deactivate checkout links or cancel existing subscriptions in Square.</p></div><form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="icpa_recurring_settings">';
         wp_nonce_field( 'icpa_recurring_settings' );
         echo '<p><label><input type="checkbox" name="enabled" value="1" ' . checked( $o['enabled'], 1, false ) . '> Enable recurring general donations</label></p><p><label><input type="checkbox" name="one_time" value="1" ' . checked( $o['one_time'], 1, false ) . '> Offer one-time general donations with custom amounts</label></p><fieldset><legend>Intervals donors may choose</legend>';
         foreach ( self::cadences() as $cadence => $label ) { echo '<p><label><input type="checkbox" name="cadences[]" value="' . esc_attr( $cadence ) . '" ' . checked( in_array( $cadence, $o['cadences'], true ), true, false ) . '> ' . esc_html( $label ) . '</label></p>'; }
@@ -180,7 +242,14 @@ final class ICPA_Recurring {
         foreach ( array( 'sandbox', 'production' ) as $mode ) {
             $valid = isset( $cache[$mode]['fingerprint'] ) && hash_equals( $cache[$mode]['fingerprint'], self::fingerprint( $mode ) );
             $plans = $valid && isset( $cache[$mode]['plans'] ) ? $cache[$mode]['plans'] : array();
-            echo '<h2>' . esc_html( ucfirst( $mode ) ) . ' subscription plans</h2><form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="icpa_refresh_plans"><input type="hidden" name="environment" value="' . esc_attr( $mode ) . '">'; wp_nonce_field( 'icpa_refresh_plans' ); submit_button( 'Load ' . ucfirst( $mode ) . ' plans', 'secondary', 'submit', false );
+            echo '<h2>' . esc_html( ucfirst( $mode ) ) . ' — create a recurring option</h2><p>Enter the amount and interval. This creates a Square plan and configures its subscription checkout; it does not charge anyone or enrol a donor. A different amount creates a new plan and replaces only this interval’s signup option. Existing subscriptions are unchanged.</p><form class="icpa-create-recurring-plan" method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="icpa_create_recurring_plan"><input type="hidden" name="environment" value="' . esc_attr( $mode ) . '">';
+            wp_nonce_field( 'icpa_create_recurring_plan' );
+            echo '<p><label for="icpa-new-' . esc_attr( $mode ) . '-cadence">Interval</label> <select id="icpa-new-' . esc_attr( $mode ) . '-cadence" name="cadence">';
+            foreach ( self::cadences() as $cadence => $label ) { echo '<option value="' . esc_attr( $cadence ) . '">' . esc_html( $label ) . '</option>'; }
+            echo '</select> <label for="icpa-new-' . esc_attr( $mode ) . '-amount">Amount (' . esc_html( ICPA_Platform::options()['currency'] ) . ')</label> <input id="icpa-new-' . esc_attr( $mode ) . '-amount" name="amount" type="number" min="' . esc_attr( number_format( ICPA_Platform::options()['minimum_amount'] / 100, 2, '.', '' ) ) . '" max="' . esc_attr( number_format( ICPA_Platform::options()['maximum_amount'] / 100, 2, '.', '' ) ) . '" step="0.01" placeholder="25.00" required></p>';
+            submit_button( 'Create ' . ucfirst( $mode ) . ' plan & checkout', 'primary', 'submit', false );
+            echo '</form><p>Enable recurring giving and tick this interval above to display it to donors. Recurring signups still use Square-hosted checkout and fixed amounts; the one-time processing-fee modes do not apply.</p>';
+            echo '<h3>' . esc_html( ucfirst( $mode ) ) . ' — use an existing plan</h3><form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="icpa_refresh_plans"><input type="hidden" name="environment" value="' . esc_attr( $mode ) . '">'; wp_nonce_field( 'icpa_refresh_plans' ); submit_button( 'Load ' . ucfirst( $mode ) . ' plans', 'secondary', 'submit', false );
             if ( $valid && ! empty( $cache[$mode]['cursor'] ) ) { echo ' <button class="button" name="more" value="1">Load next page</button>'; }
             echo '</form><p>Only single-phase, indefinite, static-price plans in your site currency and donation limits are offered. Trials, discounts, proration and scheduled billing anchors are excluded.</p>';
             foreach ( self::cadences() as $cadence => $label ) {

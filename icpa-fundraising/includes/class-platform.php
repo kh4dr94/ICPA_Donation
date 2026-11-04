@@ -2,7 +2,7 @@
 defined( 'ABSPATH' ) || exit;
 
 final class ICPA_Platform {
-    const VERSION = '0.9.4';
+    const VERSION = '0.10.0';
     const OPTION = 'icpa_fundraising_settings';
     const TYPE = 'icpa_campaign';
 
@@ -199,6 +199,7 @@ final class ICPA_Platform {
     }
 
     public static function admin_assets() {
+        if ( current_user_can( 'manage_options' ) && isset( $_GET['page'] ) && 'icpa-recurring' === $_GET['page'] ) { wp_enqueue_style( 'icpa-recurring-admin', plugins_url( 'assets/fee-settings.css', ICPA_FUNDRAISING_FILE ), array(), self::VERSION ); }
         if ( current_user_can( 'manage_options' ) && isset( $_GET['page'] ) && 'icpa-donations' === $_GET['page'] ) { wp_enqueue_style( 'icpa-ledger', plugins_url( 'assets/admin-ledger.css', ICPA_FUNDRAISING_FILE ), array(), self::VERSION ); }
         if ( ! isset( $_GET['page'] ) || ! in_array( $_GET['page'], array( 'icpa-platform', 'icpa-general-settings' ), true ) || ! current_user_can( 'manage_options' ) ) { return; }
         wp_enqueue_style( 'icpa-fee-settings', plugins_url( 'assets/fee-settings.css', ICPA_FUNDRAISING_FILE ), array(), self::VERSION );

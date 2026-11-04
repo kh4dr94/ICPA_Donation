@@ -57,6 +57,7 @@ dlocal exec "$task_wp" php /test/platform-integration.php
 dlocal exec "$task_wp" php /test/donations-integration.php
 dlocal exec "$task_wp" php /test/locations-integration.php
 dlocal exec "$task_wp" php /test/recurring-integration.php
+dlocal exec "$task_wp" php /test/recurring-create-integration.php
 dlocal exec "$task_wp" php /test/security-integration.php
 dlocal exec "$task_wp" php /test/fees-integration.php
 dlocal cp "$task_wp:/tmp/icpa-fee-view.html" /tmp/icpa-fee-view.html

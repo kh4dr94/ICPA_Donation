@@ -1,8 +1,22 @@
-# ICPA Fundraising — version 0.9.4
+# ICPA Fundraising — version 0.10.0
 
 An installable WordPress donation plugin with general custom-amount giving and optional fundraising campaigns, organisers and donor accounts. All donations go to **one ICPA Square account**. ICPA approves campaigns and manages distribution; organisers cannot enter a different payment recipient.
 
 This is an initial implementation. WordPress flows and payment logic have automated coverage, but your Square profiles still need real account credentials and end-to-end sandbox testing before live use.
+
+## Create recurring plans in WordPress (0.10.0)
+
+1. Save and test the Sandbox profile under **ICPA Donations → Square connections**.
+2. Open **ICPA Donations → Recurring giving**. In **Sandbox — create a recurring option**, choose Weekly, Monthly, Quarterly or Yearly and enter the fixed amount.
+3. Click **Create Sandbox plan & checkout**. The plugin creates a Square subscription plan and a single-phase, indefinite, fixed-price variation in the configured currency/location, then validates and saves its subscription checkout.
+4. Tick **Enable recurring general donations**, select the intervals to offer and save. The existing donation shortcode displays eligible configured options automatically.
+5. Test signup and cancellation in Sandbox. Use the separate Production form when ready; creating a Production plan does not switch the active checkout environment.
+
+Creation requires Square Catalog read/write and checkout permissions. No subscriber is enrolled or charged by an admin plan-creation action. One amount is offered per interval per environment. A different amount creates a new plan/variation and replaces that interval's signup option without changing or cancelling existing subscriptions. The **use an existing plan** controls remain available if you prefer to reuse plans already in Square.
+
+Creation uses stable idempotency keys plus non-autoloaded saved stage references. If an API call, checkout validation or local save fails, retry the same amount and interval to resume without duplicating catalog objects. A cached plan is revalidated against the requested amount before publication. Changed/deleted Square objects cause an error rather than repricing existing subscriptions or silently publishing another amount. Removing an option in WordPress does not delete catalog objects or cancel subscriptions.
+
+This update automates plan setup; recurring signups still use Square-hosted checkout and fixed amounts. Renewal/cancellation records remain managed in Square and are not added to the one-time ledger or campaign totals. The one-time processing-fee controls do not apply. Application IDs are required for embedded one-time card entry, not for hosted recurring plan creation.
 
 ## Card entry on your donation page (0.7.0+)
 
@@ -14,9 +28,9 @@ Start with Sandbox. Enter a custom amount and test card `4111 1111 1111 1111`, a
 
 During a payment retry, the form locks its amount/email and retains its single-use token and submission key; Square idempotency prevents a repeated request creating another payment. If a network error leaves confirmation uncertain, retry that same attempt or contact ICPA before starting another donation. A declined card requires reloading for a new attempt. The backend rate-limits requests, validates nonces/environment/amount/campaign status, and continues to process signed payment/refund webhooks. No OAuth redirect or Application secret is required.
 
-Version 0.9.4 shows individual green ticks for amount, first name, last name and email, and separate card-number, expiry, CVV and postcode statuses below the Square iframe. Card status comes from Square’s per-field input events; the overall card check requires all four fields to be valid. Invalidated or cleared fields lose their ticks. The selected amount uses contrasting text and a checkmark. A confirmed payment replaces the entry form with a large green confirmation panel, server-confirmed amount and donation reference, and moves keyboard focus to the result. Sandbox says “Test donation completed” and explicitly states that no real money was charged. Pending payments use an amber processing panel and never claim success. This feedback indicates input completeness, not card approval or successful payment. First and last name remain required.
+Version 0.10.0 shows individual green ticks for amount, first name, last name and email, and separate card-number, expiry, CVV and postcode statuses below the Square iframe. Card status comes from Square’s per-field input events; the overall card check requires all four fields to be valid. Invalidated or cleared fields lose their ticks. The selected amount uses contrasting text and a checkmark. A confirmed payment replaces the entry form with a large green confirmation panel, server-confirmed amount and donation reference, and moves keyboard focus to the result. Sandbox says “Test donation completed” and explicitly states that no real money was charged. Pending payments use an amber processing panel and never claim success. This feedback indicates input completeness, not card approval or successful payment. First and last name remain required.
 
-## Design your own page (0.9.4)
+## Design your own page (0.10.0)
 
 Use WordPress blocks or Elementor for your banner, images, columns and text, then insert `[icpa_donation_form]` in a Shortcode block/widget. The plugin keeps your theme's page layout, header and footer. The redesigned default form provides larger controls, numbered giving/details/payment sections, responsive name columns and the existing validation/confirmation states.
 
@@ -28,7 +42,7 @@ For a form that fits directly inside your own section/card without another borde
 
 Set colours and the donation heading under **ICPA Donations → Settings**. Advanced theme styling can target `.icpa-general-widget`, `.icpa-payment-entry` and `.icpa-form-step`. Square's secure card iframe retains its own layout; the plugin never replaces it with ordinary WordPress card inputs. The plugin does not change your page builder content or other plugins' dashboard notices.
 
-## Select Square locations by name (0.9.4)
+## Select Square locations by name (0.10.0)
 
 1. Under **ICPA Donations → Square connections**, save the matching environment's access token.
 2. Click **Load Sandbox locations** or **Load Production locations** below the profiles. Save profile edits before loading.
@@ -37,11 +51,11 @@ Set colours and the donation heading under **ICPA Donations → Settings**. Adva
 
 All returned locations are listed; inactive locations or locations using a different site currency are disabled. Discovery is administrator-only, nonce-protected and read-only against Square. Location names/IDs are cached independently for each environment and invalidated when the access token changes. The manual legacy field on general Settings has been replaced with a link to these profile selectors. Existing saved locations remain selected even before discovery; advanced server-configured locations remain controlled on the server. Changing the selected location applies to new donation attempts. Each new one-time donation stores its location so later payment/refund reconciliation continues using its original location; previously stored rows without a location are assigned the old profile location before an administrator changes profiles. Credentials must still belong to the same receiving ICPA Square account for historical payments to be accessible. In-progress attempts must be reloaded if the default location changes.
 
-The 0.9.4 refinement matches the supplied panel's rounded border, content-sized card container, light background, neutral circular status indicators, spacing and centered captions. Initial indicators are Card, Expiry and CVV; the postcode indicator appears when Square emits a postcode field event. Square's required postcode input is never hidden. Only the outer panel is controlled by plugin CSS; the supported SDK styles set the input font, placeholder and border, while Square still controls the secure iframe's exact field layout. Pixel-identical input rendering across regions, widths and browser/autofill configurations is not guaranteed.
+The 0.10.0 refinement matches the supplied panel's rounded border, content-sized card container, light background, neutral circular status indicators, spacing and centered captions. Initial indicators are Card, Expiry and CVV; the postcode indicator appears when Square emits a postcode field event. Square's required postcode input is never hidden. Only the outer panel is controlled by plugin CSS; the supported SDK styles set the input font, placeholder and border, while Square still controls the secure iframe's exact field layout. Pixel-identical input rendering across regions, widths and browser/autofill configurations is not guaranteed.
 
-Version 0.9.4 displays the configured percentage and any fixed estimate beside the processing-cost amount. It does not assume a 2.25% rate: enter your actual estimate in Settings. The secure card area uses a rounded white container, simple field indicators below it, and clear submit/payment-provider captions. Required postcode fields remain controlled by Square. The calculation and consent modes are unchanged.
+Version 0.10.0 displays the configured percentage and any fixed estimate beside the processing-cost amount. It does not assume a 2.25% rate: enter your actual estimate in Settings. The secure card area uses a rounded white container, simple field indicators below it, and clear submit/payment-provider captions. Required postcode fields remain controlled by Square. The calculation and consent modes are unchanged.
 
-## Three-button processing fee selector (0.9.4)
+## Three-button processing fee selector (0.10.0)
 
 Under **ICPA Donations → Settings → Processing fee handling**, select **Absorb fees**, **Add to donation**, or **Donor chooses**, then save. The active mode is highlighted and an explanation changes as you select it. Existing 0.9.0 settings migrate to Absorb or Donor chooses without changing the configured rates.
 
@@ -51,7 +65,7 @@ Under **ICPA Donations → Settings → Processing fee handling**, select **Abso
 
 A nonzero percentage or fixed estimate is required for either mode that adds costs. Rates remain administrator-configured estimates and actual Square fees are reported separately. The shortcode defaults to the global mode. You can use `fees="off"`, `fees="optional"`, or `fees="pass_on"` for individual forms; adding costs requires a non-absorb global mode. Overrides are signed into each form policy. This applies only to one-time donations.
 
-## Required fields, donation breakdown and processing costs (0.9.4)
+## Required fields, donation breakdown and processing costs (0.10.0)
 
 Required donation and campaign fields have a red asterisk and accessible required text. The one-time form displays donation amount, optional processing-cost contribution and the total before submission; the confirmation repeats the server-verified breakdown.
 
@@ -164,10 +178,10 @@ The automated development tests mock Square HTTP responses. They do not validate
 
 Go to **ICPA Donations → Recurring giving**. Recurring options are disabled by default and apply to **general donations only**. Campaign checkouts remain one-time, so recurring renewals never misleadingly increase campaign progress.
 
-1. In Square, create the fixed-price subscription plans you want to offer in each environment. This version accepts one indefinite phase with static pricing, no trial, discounts, proration or billing anchor. Supported intervals are weekly, monthly, quarterly and annual. Plan currency and amount must match the site's currency and donation limits.
-2. Configure the corresponding Square profiles in WordPress. The token needs Catalog read access in addition to the Checkout permissions already required for donation links.
-3. Click **Load Sandbox plans**. Eligible plan variations appear in the interval dropdowns. Use **Load next page** if your catalog has more than 100 results.
-4. Select the Square plan for an interval and click **Validate & create checkout**. This reads the plan again and creates or reuses a Square-hosted subscription payment link. It does not charge anyone or create a customer's subscription.
+1. Create the fixed-price subscription plans from the WordPress amount/interval forms above, or reuse existing Square plans. This version accepts one indefinite phase with static pricing, no trial, discounts, proration or billing anchor. Supported intervals are weekly, monthly, quarterly and annual. Plan currency and amount must match the site's currency and donation limits.
+2. Configure the corresponding Square profiles in WordPress. The token needs Catalog read/write access to create plans, in addition to the Checkout permissions already required for donation links.
+3. If reusing existing plans, click **Load Sandbox plans**. Eligible plan variations appear in the interval dropdowns. Use **Load next page** if your catalog has more than 100 results.
+4. For an existing plan, select the Square plan for an interval and click **Validate & create checkout**. This reads the plan again and creates or reuses a Square-hosted subscription payment link. It does not charge anyone or create a customer's subscription.
 5. Enable recurring general donations and choose which intervals donors may see. Keep **Offer one-time general donations with custom amounts** selected to show both, or turn it off to offer configured recurring gifts only. Repeat plan setup separately for Production when ready.
 6. Test the real sandbox subscription signup, first charge, renewal behaviour and cancellation in Square before enabling production recurring giving. Developer tests simulate Square responses; they do not establish that an actual merchant account supports or correctly configures those operations.
 

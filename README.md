@@ -2,13 +2,13 @@
 
 ## Download and install
 
-Version 0.9.4 removes the card panel’s fixed minimum height so it fits its fields. Version 0.9.3 refines the reference-style card panel proportions, neutral status circles and captions. Version 0.9.2 shows the configured processing percentage/fixed rate beside the contribution amount and restyles the secure card panel. Version 0.9.1 added a three-button fee selector: Absorb fees, Add to donation and Donor chooses. Version 0.9.0 introduced required-field asterisks, a live donation/contribution/total breakdown, optional processing-cost contributions configurable per form, and actual Square fee reporting in the admin ledger. Contributions are optional, off by default, calculated from administrator-supplied estimates and excluded from campaign progress.
+Version 0.10.0 creates fixed-price recurring Square plans and their hosted checkout directly from WordPress. Enter an amount and interval under **ICPA Donations → Recurring giving**; no manual plan setup in Square is needed. Sandbox and Production are independent, retries reuse creation stages, and existing subscriptions are not repriced.
 
 [Download the ICPA Fundraising plugin ZIP](https://github.com/kh4dr94/ICPA_Donation/raw/refs/heads/main/icpa-fundraising.zip), then upload it in WordPress under **Plugins → Add New → Upload Plugin** and activate it. Upload this plugin ZIP, rather than GitHub's source-code ZIP of the whole repository.
 
 The repository now contains two WordPress plugins:
 
-- **[ICPA Fundraising](icpa-fundraising/README.md)**: the donation plugin with optional campaigns (v0.9), including organiser submissions, donor accounts, Square hosted checkout integration and verified fundraising totals. Upload `icpa-fundraising.zip`. Square credentials and end-to-end sandbox validation are still required before taking live donations.
+- **[ICPA Fundraising](icpa-fundraising/README.md)**: the donation plugin with optional campaigns (v0.10), including organiser submissions, donor accounts, Square hosted checkout integration and verified fundraising totals. Upload `icpa-fundraising.zip`. Square credentials and end-to-end sandbox validation are still required before taking live donations.
 - **ICPA Square Donations**: the original simple donation-link button described below. Upload `icpa-square-donations.zip` if you only need a button linking to an existing Square payment link.
 
 Open [the interactive platform preview](preview/fundraising-platform.html) in your browser to try general giving, campaign browsing, a sample submission, a demo donor account and the WordPress general, Square and recurring settings screens. No preview action saves real settings or processes a payment. Sample data and simulated actions are labelled throughout. Desktop, campaign and mobile screenshots are in `preview/`.

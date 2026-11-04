@@ -85,6 +85,13 @@ const path = require('path');
     if (await page.locator('input[name="profiles[sandbox][access_token]"]').inputValue() !== '' || await page.locator('input[name="profiles[production][signature_key]"]').inputValue() !== '') throw new Error('Settings preview exposed credentials');
     await page.screenshot({ path: path.join(root, 'preview/donation-settings.png'), fullPage: true });
     await page.evaluate(() => render('recurring_settings'));
+    if (await page.locator('.icpa-create-recurring-plan').count() !== 2) throw new Error('Recurring creation must have separate Sandbox and Production forms');
+    for (const environment of ['sandbox','production']) {
+        const form = page.locator('.icpa-create-recurring-plan').filter({has:page.locator('input[name=environment][value=' + environment + ']')});
+        await form.locator('[name=cadence]').selectOption('MONTHLY');
+        await form.locator('[name=amount]').fill('25.00');
+        if (!(await form.locator('[name=amount]').evaluate(input => input.checkValidity()))) throw new Error('Valid recurring creation amount rejected');
+    }
     if (await page.locator('[name="cadences[]"]').count() !== 4) throw new Error('Recurring settings must expose four intervals');
     if (await page.locator('select[name=plan_id]').count() !== 8) throw new Error('Recurring settings must separate four intervals across both Square environments');
     await page.screenshot({ path: path.join(root, 'preview/recurring-settings.png'), fullPage: true });
