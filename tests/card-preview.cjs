@@ -43,6 +43,8 @@ const fs = require('fs');
         const selection = await page.locator('.icpa-amounts button').first().evaluate(button => ({pressed:button.getAttribute('aria-pressed'), color:getComputedStyle(button).color, background:getComputedStyle(button).backgroundColor, check:getComputedStyle(button,'::before').content}));
         if (selection.pressed !== 'true' || selection.color !== 'rgb(40, 28, 70)' || selection.background !== 'rgb(255, 242, 197)' || !selection.check.includes('✓')) throw Error('Selected amount must remain readable under theme hover styles: ' + JSON.stringify(selection));
         await page.locator('[name=amount]').fill('25.50');
+        if (!(await page.locator('.icpa-summary-fee-label').textContent()).includes('2.20%') || !(await page.locator('.icpa-summary-fee-label').textContent()).includes('0.30')) throw Error('Configured percentage and fixed rate must be visible');
+        if (!(await page.locator('.icpa-card-powered').textContent()).includes('Square')) throw Error('Secure card panel caption missing');
         if (!(await page.locator('[data-summary-total]').textContent()).includes('25.50')) throw Error('Default summary must show donation only');
         await page.locator('[name=cover_fees][value="1"]').check();
         if (!(await page.locator('[data-summary-fee]').textContent()).includes('0.89') || !(await page.locator('[data-summary-total]').textContent()).includes('26.39')) throw Error('Contribution breakdown must match rounded total');

@@ -86,7 +86,7 @@
             if (!window.isSecureContext) { throw new Error('Card payments require a secure HTTPS connection.'); }
             if (!window.Square) { throw new Error('The secure card form could not load. Refresh the page or contact ICPA.'); }
             const payments = window.Square.payments(form.dataset.appId, form.dataset.locationId);
-            card = await payments.card();
+            card = await payments.card({ style: { input: { fontSize: '16px', color: '#281c46' }, 'input::placeholder': { color: '#7c8491' }, '.input-container': { borderColor: '#d8dce3', borderRadius: '8px' }, '.input-container.is-focus': { borderColor: '#281c46' } } });
             const updateCardField = function (event) {
                 if (!validity || busy || finished) { return; }
                 const detail = event.detail;

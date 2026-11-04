@@ -81,12 +81,12 @@ final class ICPA_Views {
             <label for="<?php echo esc_attr( $id ); ?>-first">First name <?php echo self::required_mark(); ?> <span class="icpa-field-check" data-validation-for="first_name" aria-live="polite"></span></label><input id="<?php echo esc_attr( $id ); ?>-first" name="first_name" autocomplete="given-name" maxlength="100" required></div><div>
             <label for="<?php echo esc_attr( $id ); ?>-last">Last name <?php echo self::required_mark(); ?> <span class="icpa-field-check" data-validation-for="last_name" aria-live="polite"></span></label><input id="<?php echo esc_attr( $id ); ?>-last" name="last_name" autocomplete="family-name" maxlength="100" required></div></div>
             <label for="<?php echo esc_attr( $id ); ?>-email">Email <?php echo self::required_mark(); ?> <span class="icpa-field-check" data-validation-for="email" aria-live="polite"></span></label><input id="<?php echo esc_attr( $id ); ?>-email" type="email" name="email" autocomplete="email" maxlength="254" required>
-            <div class="icpa-form-step"><span aria-hidden="true">03</span> Secure payment</div><span class="icpa-card-label">Card details <?php echo self::required_mark(); ?></span><div id="<?php echo esc_attr( $id ); ?>-card" class="icpa-card-container"></div>
+            <div class="icpa-form-step"><span aria-hidden="true">03</span> Secure payment</div><span class="icpa-card-label">Card details <?php echo self::required_mark(); ?></span><div class="icpa-card-area"><div id="<?php echo esc_attr( $id ); ?>-card" class="icpa-card-container"></div>
             <div class="icpa-card-checks" aria-label="Card field validation">
-                <?php foreach ( array( 'cardNumber' => 'Card number', 'expirationDate' => 'Expiry', 'cvv' => 'CVV', 'postalCode' => 'Postcode' ) as $field => $label ) { ?><span class="icpa-card-field-check" data-card-field="<?php echo esc_attr( $field ); ?>" data-state="empty"><span class="icpa-check-icon" aria-hidden="true">○</span> <?php echo esc_html( $label ); ?> <?php echo self::required_mark(); ?><span class="screen-reader-text icpa-check-description">: not completed</span></span><?php } ?>
+                <?php foreach ( array( 'cardNumber' => 'Card', 'expirationDate' => 'Expiry', 'cvv' => 'CVV', 'postalCode' => 'Postcode' ) as $field => $label ) { ?><span class="icpa-card-field-check" data-card-field="<?php echo esc_attr( $field ); ?>" data-state="empty"><span class="icpa-check-icon" aria-hidden="true">○</span> <?php echo esc_html( $label ); ?> <?php echo self::required_mark(); ?><span class="screen-reader-text icpa-check-description">: not completed</span></span><?php } ?>
             </div>
             <p class="icpa-card-validity icpa-small" role="status" aria-live="polite" hidden></p>
-            <p class="icpa-card-status icpa-small" role="status" aria-live="polite">Loading secure card form…</p><noscript>JavaScript is required for secure card payments.</noscript>
+            <p class="icpa-card-status icpa-small" role="status" aria-live="polite">Loading secure card form…</p><noscript>JavaScript is required for secure card payments.</noscript><p class="icpa-card-hint">Payment will be processed when you submit the form</p><p class="icpa-card-powered">Secure payment powered by Square</p></div>
             <?php } ?>
             <?php if ( 1 === $fee_policy ) { ?>
             <fieldset class="icpa-fee-options"><legend>Processing costs</legend>
@@ -96,7 +96,7 @@ final class ICPA_Views {
             </fieldset><?php } elseif ( 2 === $fee_policy ) { ?><input type="hidden" name="cover_fees" value="1"><p class="icpa-fee-included">This form adds an estimated processing-cost contribution. Review the total below before donating.</p><?php } ?>
             <section class="icpa-donation-summary" aria-label="Donation breakdown" aria-live="polite">
                 <div><span>Donation</span><strong data-summary-donation>Choose an amount</strong></div>
-                <div><span>Processing-cost contribution</span><strong data-summary-fee>—</strong></div>
+                <div><span class="icpa-summary-fee-label">Processing-cost contribution <span class="icpa-fee-rate">(<?php echo esc_html( number_format_i18n( $o['fee_bps'] / 100, 2 ) . '%' . ( $o['fee_fixed'] ? ' + ' . ICPA_Platform::money( $o['fee_fixed'], $o['currency'] ) : '' ) ); ?> estimated)</span></span><strong data-summary-fee>—</strong></div>
                 <div class="icpa-summary-total"><span>Total you pay</span><strong data-summary-total>Choose an amount</strong></div>
                 <p class="icpa-small"><?php echo 2 === $fee_policy ? 'The processing-cost contribution shown is included in your total and goes to ICPA.' : 'Any contribution is optional and goes to ICPA.'; ?> Square’s actual fee is deducted from ICPA’s payment; it is not an extra charge added by Square at checkout.</p>
             </section>
