@@ -44,6 +44,12 @@ add_filter( 'pre_http_request', function ( $pre, $args, $url ) use ( &$orders, &
 $input = array( '_wpnonce' => $nonce, 'environment' => 'sandbox', 'campaign_id' => '0', 'amount' => '25.50', 'checkout_key' => wp_generate_uuid4(), 'source_id' => 'cnon:card-test-token', 'email' => 'donor@example.invalid' );
 $r = card_request( $input );
 card_check( $r['success'] && 'completed' === $r['data']['status'], 'Guest can complete embedded donation' );
+card_check( 'Test donation completed' === $r['data']['title'] && false !== strpos( $r['data']['message'], 'No real money' ), 'Sandbox confirmation explicitly labels simulated payment' );
+card_check( 'AUD $25.50' === $r['data']['amount'] && 0 === strpos( $r['data']['reference'], 'ICPA-' ), 'Confirmation shows server-verified amount and donation reference' );
+$pending = ICPA_Square::payment_confirmation( array( 'mode' => 'production', 'amount' => 2550, 'currency' => 'AUD', 'id' => 1 ), 'pending' );
+card_check( 'Payment processing' === $pending['title'] && false !== strpos( $pending['message'], 'not yet been confirmed' ), 'Pending confirmation must not claim payment received' );
+$live = ICPA_Square::payment_confirmation( array( 'mode' => 'production', 'amount' => 2550, 'currency' => 'AUD', 'id' => 1 ), 'completed' );
+card_check( 'Thank you for your donation' === $live['title'] && false !== strpos( $live['message'], 'confirmed by Square' ), 'Production success requires completed status' );
 card_check( 1 === $orders && 1 === $payments, 'Creates one order and payment' );
 card_check( 2550 === $captured[1]['amount_money']['amount'] && 'AUD' === $captured[1]['amount_money']['currency'] && 'card-test-location' === $captured[1]['location_id'], 'Server binds amount, currency and location' );
 global $wpdb;

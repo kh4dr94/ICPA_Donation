@@ -2,7 +2,7 @@
 defined( 'ABSPATH' ) || exit;
 
 final class ICPA_Platform {
-    const VERSION = '0.7.1';
+    const VERSION = '0.7.2';
     const OPTION = 'icpa_fundraising_settings';
     const TYPE = 'icpa_campaign';
 

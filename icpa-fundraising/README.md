@@ -1,4 +1,4 @@
-# ICPA Fundraising — version 0.7.1
+# ICPA Fundraising — version 0.7.2
 
 An installable WordPress donation plugin with general custom-amount giving and optional fundraising campaigns, organisers and donor accounts. All donations go to **one ICPA Square account**. ICPA approves campaigns and manages distribution; organisers cannot enter a different payment recipient.
 
@@ -14,7 +14,7 @@ Start with Sandbox. Enter a custom amount and test card `4111 1111 1111 1111`, a
 
 During a payment retry, the form locks its amount/email and retains its single-use token and submission key; Square idempotency prevents a repeated request creating another payment. If a network error leaves confirmation uncertain, retry that same attempt or contact ICPA before starting another donation. A declined card requires reloading for a new attempt. The backend rate-limits requests, validates nonces/environment/amount/campaign status, and continues to process signed payment/refund webhooks. No OAuth redirect or Application secret is required.
 
-Version 0.7.1 adds a live checkmark when Square reports complete card details, inline incomplete/invalid feedback, and contrasting selected amount buttons with checkmarks. This feedback indicates input completeness, not card approval or successful payment. First and last name remain required.
+Version 0.7.2 shows individual green ticks for amount, first name, last name and email, and separate card-number, expiry, CVV and postcode statuses below the Square iframe. Card status comes from Square’s per-field input events; the overall card check requires all four fields to be valid. Invalidated or cleared fields lose their ticks. The selected amount uses contrasting text and a checkmark. A confirmed payment replaces the entry form with a large green confirmation panel, server-confirmed amount and donation reference, and moves keyboard focus to the result. Sandbox says “Test donation completed” and explicitly states that no real money was charged. Pending payments use an amber processing panel and never claim success. This feedback indicates input completeness, not card approval or successful payment. First and last name remain required.
 
 ## Included
 

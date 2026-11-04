@@ -107,6 +107,18 @@ final class ICPA_Square {
         return $link['url'];
     }
 
+    public static function payment_confirmation( $row, $status ) {
+        $completed = 'completed' === $status;
+        $sandbox = 'sandbox' === $row['mode'];
+        return array(
+            'status' => $status,
+            'title' => $completed ? ( $sandbox ? 'Test donation completed' : 'Thank you for your donation' ) : 'Payment processing',
+            'message' => $completed ? ( $sandbox ? 'Your test payment was confirmed by Square. No real money was charged.' : 'Your donation has been received and confirmed by Square.' ) : 'Your payment has not yet been confirmed. Please do not submit another donation. Contact ICPA if you need help checking its status.',
+            'amount' => ICPA_Platform::money( (int) $row['amount'], $row['currency'] ),
+            'reference' => 'ICPA-' . $row['id'],
+        );
+    }
+
     /** Card numbers stay inside Square's iframe. Only a single-use payment token reaches this handler. */
     public static function card_payment() {
         ICPA_Security::require_post( 16384 );
@@ -121,7 +133,7 @@ final class ICPA_Square {
         if ( ! is_string( $source ) || ! preg_match( '/\A[\x21-\x7e]{10,1024}\z/', $source ) || ! is_string( $email ) || strlen( $email ) > 254 || ! is_email( $email ) ) { wp_send_json_error( array( 'message' => 'Enter a valid email and valid card details.' ), 400 ); }
         $row = self::create_checkout( isset( $_POST['campaign_id'] ) ? wp_unslash( $_POST['campaign_id'] ) : 0, isset( $_POST['amount'] ) ? wp_unslash( $_POST['amount'] ) : '', isset( $_POST['checkout_key'] ) ? wp_unslash( $_POST['checkout_key'] ) : '', true );
         if ( is_wp_error( $row ) ) { wp_send_json_error( array( 'message' => $row->get_error_message() ), 400 ); }
-        if ( 'completed' === $row['status'] ) { wp_send_json_success( array( 'status' => 'completed', 'message' => 'Thank you. Your donation has been received.' ) ); }
+        if ( 'completed' === $row['status'] ) { wp_send_json_success( self::payment_confirmation( $row, 'completed' ) ); }
         $result = self::api( 'POST', '/v2/payments', array( 'source_id' => $source, 'idempotency_key' => $row['checkout_key'], 'order_id' => $row['order_id'], 'location_id' => $profile['location_id'], 'amount_money' => array( 'amount' => (int) $row['amount'], 'currency' => $row['currency'] ), 'autocomplete' => true, 'buyer_email_address' => $email, 'note' => 'ICPA donation ' . $row['checkout_key'] ) );
         if ( is_wp_error( $result ) ) { wp_send_json_error( array( 'message' => 'Payment was not confirmed. Retry this same attempt to check it safely. If your card was declined, reload the page before using another card.' ), 502 ); }
         $payment = isset( $result['payment'] ) && is_array( $result['payment'] ) ? $result['payment'] : array();
@@ -129,7 +141,7 @@ final class ICPA_Square {
         $saved = self::apply_payment( $payment, $row['mode'] );
         if ( is_wp_error( $saved ) ) { wp_send_json_error( array( 'message' => 'Your payment is awaiting confirmation. Contact ICPA before trying a new donation.' ), 503 ); }
         if ( in_array( $payment['status'], array( 'FAILED', 'CANCELED' ), true ) ) { wp_send_json_error( array( 'message' => 'This payment was declined or canceled. Reload the page before trying another card.' ), 400 ); }
-        wp_send_json_success( array( 'status' => 'COMPLETED' === $payment['status'] ? 'completed' : 'pending', 'message' => 'COMPLETED' === $payment['status'] ? 'Thank you. Your donation has been received.' : 'Your payment is processing. Please do not submit another donation.' ) );
+        wp_send_json_success( self::payment_confirmation( $row, 'COMPLETED' === $payment['status'] ? 'completed' : 'pending' ) );
     }
 
     public static function checkout() {
