@@ -48,7 +48,7 @@
                 // Explicit field selection: card details never enter this request.
                 const body = new URLSearchParams({ action: 'icpa_card_payment', source_id: token });
                 ['_wpnonce', 'environment', 'campaign_id', 'checkout_key', 'amount', 'email', 'fee_quote'].forEach(name => body.set(name, form.elements[name].value));
-                const contribution = form.querySelector('[name="cover_fees"]:checked');
+                const contribution = form.elements.cover_fees;
                 body.set('cover_fees', contribution ? contribution.value : '0');
                 const response = await fetch(form.dataset.endpoint, { method: 'POST', credentials: 'same-origin', body: body });
                 let result;

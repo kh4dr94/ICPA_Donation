@@ -1,4 +1,4 @@
-# ICPA Fundraising — version 0.9.0
+# ICPA Fundraising — version 0.9.1
 
 An installable WordPress donation plugin with general custom-amount giving and optional fundraising campaigns, organisers and donor accounts. All donations go to **one ICPA Square account**. ICPA approves campaigns and manages distribution; organisers cannot enter a different payment recipient.
 
@@ -14,9 +14,9 @@ Start with Sandbox. Enter a custom amount and test card `4111 1111 1111 1111`, a
 
 During a payment retry, the form locks its amount/email and retains its single-use token and submission key; Square idempotency prevents a repeated request creating another payment. If a network error leaves confirmation uncertain, retry that same attempt or contact ICPA before starting another donation. A declined card requires reloading for a new attempt. The backend rate-limits requests, validates nonces/environment/amount/campaign status, and continues to process signed payment/refund webhooks. No OAuth redirect or Application secret is required.
 
-Version 0.9.0 shows individual green ticks for amount, first name, last name and email, and separate card-number, expiry, CVV and postcode statuses below the Square iframe. Card status comes from Square’s per-field input events; the overall card check requires all four fields to be valid. Invalidated or cleared fields lose their ticks. The selected amount uses contrasting text and a checkmark. A confirmed payment replaces the entry form with a large green confirmation panel, server-confirmed amount and donation reference, and moves keyboard focus to the result. Sandbox says “Test donation completed” and explicitly states that no real money was charged. Pending payments use an amber processing panel and never claim success. This feedback indicates input completeness, not card approval or successful payment. First and last name remain required.
+Version 0.9.1 shows individual green ticks for amount, first name, last name and email, and separate card-number, expiry, CVV and postcode statuses below the Square iframe. Card status comes from Square’s per-field input events; the overall card check requires all four fields to be valid. Invalidated or cleared fields lose their ticks. The selected amount uses contrasting text and a checkmark. A confirmed payment replaces the entry form with a large green confirmation panel, server-confirmed amount and donation reference, and moves keyboard focus to the result. Sandbox says “Test donation completed” and explicitly states that no real money was charged. Pending payments use an amber processing panel and never claim success. This feedback indicates input completeness, not card approval or successful payment. First and last name remain required.
 
-## Design your own page (0.9.0)
+## Design your own page (0.9.1)
 
 Use WordPress blocks or Elementor for your banner, images, columns and text, then insert `[icpa_donation_form]` in a Shortcode block/widget. The plugin keeps your theme's page layout, header and footer. The redesigned default form provides larger controls, numbered giving/details/payment sections, responsive name columns and the existing validation/confirmation states.
 
@@ -28,7 +28,7 @@ For a form that fits directly inside your own section/card without another borde
 
 Set colours and the donation heading under **ICPA Donations → Settings**. Advanced theme styling can target `.icpa-general-widget`, `.icpa-payment-entry` and `.icpa-form-step`. Square's secure card iframe retains its own layout; the plugin never replaces it with ordinary WordPress card inputs. The plugin does not change your page builder content or other plugins' dashboard notices.
 
-## Select Square locations by name (0.9.0)
+## Select Square locations by name (0.9.1)
 
 1. Under **ICPA Donations → Square connections**, save the matching environment's access token.
 2. Click **Load Sandbox locations** or **Load Production locations** below the profiles. Save profile edits before loading.
@@ -37,11 +37,21 @@ Set colours and the donation heading under **ICPA Donations → Settings**. Adva
 
 All returned locations are listed; inactive locations or locations using a different site currency are disabled. Discovery is administrator-only, nonce-protected and read-only against Square. Location names/IDs are cached independently for each environment and invalidated when the access token changes. The manual legacy field on general Settings has been replaced with a link to these profile selectors. Existing saved locations remain selected even before discovery; advanced server-configured locations remain controlled on the server. Changing the selected location applies to new donation attempts. Each new one-time donation stores its location so later payment/refund reconciliation continues using its original location; previously stored rows without a location are assigned the old profile location before an administrator changes profiles. Credentials must still belong to the same receiving ICPA Square account for historical payments to be accessible. In-progress attempts must be reloaded if the default location changes.
 
-## Required fields, donation breakdown and processing costs (0.9.0)
+## Three-button processing fee selector (0.9.1)
+
+Under **ICPA Donations → Settings → Processing fee handling**, select **Absorb fees**, **Add to donation**, or **Donor chooses**, then save. The active mode is highlighted and an explanation changes as you select it. Existing 0.9.0 settings migrate to Absorb or Donor chooses without changing the configured rates.
+
+- **Absorb fees:** charge the chosen donation only.
+- **Add to donation:** include the configured estimated contribution automatically, with the full breakdown disclosed before payment. The backend rejects attempts to remove this charge or omit its signed policy.
+- **Donor chooses:** offer donation only (default) or the estimated contribution.
+
+A nonzero percentage or fixed estimate is required for either mode that adds costs. Rates remain administrator-configured estimates and actual Square fees are reported separately. The shortcode defaults to the global mode. You can use `fees="off"`, `fees="optional"`, or `fees="pass_on"` for individual forms; adding costs requires a non-absorb global mode. Overrides are signed into each form policy. This applies only to one-time donations.
+
+## Required fields, donation breakdown and processing costs (0.9.1)
 
 Required donation and campaign fields have a red asterisk and accessible required text. The one-time form displays donation amount, optional processing-cost contribution and the total before submission; the confirmation repeats the server-verified breakdown.
 
-Under **ICPA Donations → Settings → Optional processing-cost contributions**, enable the donor choice and enter the estimated percentage and fixed amount from your Square agreement. These are administrator-supplied estimates, not a rate fetched from Square. Defaults are zero and disabled. Supported ranges are 0–10% plus a fixed 0–10 in site currency. At least one rate must be nonzero for the choice to appear. Donors default to **Donate my chosen amount only** and can choose to add a contribution. This contribution goes to ICPA and is not a separate extra charge by Square.
+Under **ICPA Donations → Settings → Processing fee handling**, select Donor chooses and enter the estimated percentage and fixed amount from your Square agreement. These are administrator-supplied estimates, not a rate fetched from Square. Defaults are zero and disabled. Supported ranges are 0–10% plus a fixed 0–10 in site currency. At least one rate must be nonzero for the choice to appear. Donors default to **Donate my chosen amount only** and can choose to add a contribution. This contribution goes to ICPA and is not a separate extra charge by Square.
 
 Choose which forms offer it:
 
@@ -51,7 +61,7 @@ Choose which forms offer it:
 [icpa_donation_form appearance="minimal" fees="optional"]
 ```
 
-`optional` follows the global switch; `off` hides it on that form. Existing campaign donation forms follow the global switch; use the campaign-specific shortcode with `fees="off"` when embedding a separate form that should not offer contributions. Recurring gifts retain their fixed Square-hosted pricing and do not use this feature.
+`optional` offers donor choice when processing contributions are enabled; `off` absorbs costs on that form. With no fees attribute the form follows the global mode. Existing campaign donation forms follow the global switch; use the campaign-specific shortcode with `fees="off"` when embedding a separate form that should not offer contributions. Recurring gifts retain their fixed Square-hosted pricing and do not use this feature.
 
 The estimate uses `total = ceil((donation + fixed) / (1 - percentage))` in integer cents, with the extra contribution equal to total minus donation. This includes the estimated processing cost on the contribution itself. For example only, with a configured estimate of 2.20% + AUD 0.30, an AUD 25 donation produces an optional AUD 0.87 contribution and an AUD 25.87 total. This is not a statement of Square's actual rate. The site’s maximum applies to the total charge too.
 

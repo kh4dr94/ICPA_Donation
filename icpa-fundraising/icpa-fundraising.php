@@ -2,7 +2,7 @@
 /**
  * Plugin Name: ICPA Donations & Campaigns
  * Description: Embedded Square card donations, configurable Square-hosted recurring giving and optional campaigns inside WordPress.
- * Version: 0.9.0
+ * Version: 0.9.1
  * Requires at least: 6.4
  * Requires PHP: 7.4
  * License: GPL-2.0-or-later

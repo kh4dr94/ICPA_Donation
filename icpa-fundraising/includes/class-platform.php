@@ -2,7 +2,7 @@
 defined( 'ABSPATH' ) || exit;
 
 final class ICPA_Platform {
-    const VERSION = '0.9.0';
+    const VERSION = '0.9.1';
     const OPTION = 'icpa_fundraising_settings';
     const TYPE = 'icpa_campaign';
 
@@ -88,7 +88,7 @@ final class ICPA_Platform {
     }
 
     public static function options() {
-        return wp_parse_args( get_option( self::OPTION, array() ), array( 'fee_enabled' => 0, 'fee_bps' => 0, 'fee_fixed' => 0, 'currency' => 'AUD', 'mode' => 'sandbox', 'location_id' => '', 'account_page' => 0, 'submit_page' => 0, 'browse_page' => 0, 'general_page' => 0, 'general_enabled' => 1, 'campaigns_enabled' => 1, 'minimum_amount' => 100, 'maximum_amount' => 100000000, 'suggested_amounts' => array( 2500, 5000, 10000, 25000 ), 'donation_title' => 'Donate & Support', 'layout' => 'theme', 'primary_color' => '', 'heading_color' => '', 'hero_image_id' => 0, 'intro_title' => 'Donations & Charities', 'intro_text' => 'Support ICPA’s community campaigns. Your generosity helps turn compassion into practical support for those who need it.' ) );
+        return wp_parse_args( get_option( self::OPTION, array() ), array( 'fee_mode' => '', 'fee_enabled' => 0, 'fee_bps' => 0, 'fee_fixed' => 0, 'currency' => 'AUD', 'mode' => 'sandbox', 'location_id' => '', 'account_page' => 0, 'submit_page' => 0, 'browse_page' => 0, 'general_page' => 0, 'general_enabled' => 1, 'campaigns_enabled' => 1, 'minimum_amount' => 100, 'maximum_amount' => 100000000, 'suggested_amounts' => array( 2500, 5000, 10000, 25000 ), 'donation_title' => 'Donate & Support', 'layout' => 'theme', 'primary_color' => '', 'heading_color' => '', 'hero_image_id' => 0, 'intro_title' => 'Donations & Charities', 'intro_text' => 'Support ICPA’s community campaigns. Your generosity helps turn compassion into practical support for those who need it.' ) );
     }
 
     public static function donation_label( $campaign ) {
@@ -168,6 +168,8 @@ final class ICPA_Platform {
         }
         $clean['suggested_amounts'] = $suggestions;
         $clean['fee_enabled'] = isset( $input['fee_enabled'] ) ? ( empty( $input['fee_enabled'] ) ? 0 : 1 ) : $old['fee_enabled'];
+        $clean['fee_mode'] = isset( $input['fee_mode'] ) && in_array( $input['fee_mode'], array( 'absorb', 'pass_on', 'customer_choice' ), true ) ? $input['fee_mode'] : $old['fee_mode'];
+        if ( '' !== $clean['fee_mode'] ) { $clean['fee_enabled'] = 'absorb' === $clean['fee_mode'] ? 0 : 1; }
         $rate = isset( $input['fee_percent'] ) ? ICPA_Fees::decimal_hundredths( $input['fee_percent'] ) : $old['fee_bps'];
         $fixed = isset( $input['fee_fixed_amount'] ) ? ICPA_Fees::decimal_hundredths( $input['fee_fixed_amount'] ) : $old['fee_fixed'];
         if ( null === $rate || null === $fixed || $rate > 1000 || $fixed > 1000 ) { add_settings_error( self::OPTION, 'fee_rate', 'Set an estimated rate from 0–10% and a fixed fee from 0–10. Previous fee rates were kept.' ); $rate = $old['fee_bps']; $fixed = $old['fee_fixed']; }
@@ -199,6 +201,8 @@ final class ICPA_Platform {
     public static function admin_assets() {
         if ( current_user_can( 'manage_options' ) && isset( $_GET['page'] ) && 'icpa-donations' === $_GET['page'] ) { wp_enqueue_style( 'icpa-ledger', plugins_url( 'assets/admin-ledger.css', ICPA_FUNDRAISING_FILE ), array(), self::VERSION ); }
         if ( ! isset( $_GET['page'] ) || ! in_array( $_GET['page'], array( 'icpa-platform', 'icpa-general-settings' ), true ) || ! current_user_can( 'manage_options' ) ) { return; }
+        wp_enqueue_style( 'icpa-fee-settings', plugins_url( 'assets/fee-settings.css', ICPA_FUNDRAISING_FILE ), array(), self::VERSION );
+        wp_enqueue_script( 'icpa-fee-settings', plugins_url( 'assets/fee-settings.js', ICPA_FUNDRAISING_FILE ), array(), self::VERSION, true );
         wp_enqueue_media();
         wp_enqueue_script( 'icpa-branding-admin', plugins_url( 'assets/branding-admin.js', ICPA_FUNDRAISING_FILE ), array( 'media-views' ), self::VERSION, true );
     }
@@ -229,7 +233,7 @@ final class ICPA_Platform {
             $fee_detail = null === $row['processing_fee'] ? 'Not yet reported by Square' : self::money( (int) $row['processing_fee'], $row['currency'] ) . ' fee; ' . self::money( (int) $row['amount'] - (int) $row['refunded'] - (int) $row['processing_fee'], $row['currency'] ) . ' after refunds and reported fees';
             $user = $row['user_id'] ? get_user_by( 'id', $row['user_id'] ) : false;
             $refresh = '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="icpa_reconcile_donation"><input type="hidden" name="donation_id" value="' . esc_attr( $row['id'] ) . '">' . wp_nonce_field( 'icpa_reconcile_' . $row['id'], '_wpnonce', true, false ) . '<button type="submit" class="button-link">Refresh from Square</button></form>';
-            echo '<tr><td>' . esc_html( $row['id'] ) . '<br>' . esc_html( $row['created_at'] ) . '</td><td>' . esc_html( self::donation_label( (int) $row['campaign_id'] ) ) . '</td><td>' . esc_html( $user ? $user->display_name : 'Guest or deleted account' ) . '</td><td>' . esc_html( self::money( (int) $row['amount'], $row['currency'] ) ) . '<br>' . esc_html( self::money( (int) $row['refunded'], $row['currency'] ) ) . ' refunded<br>' . esc_html( self::money( (int) $row['fee_contribution'], $row['currency'] ) . ' optional contribution' ) . '</td><td>' . esc_html( $fee_detail ) . '</td><td>' . '<span class="icpa-ledger-status status-' . esc_attr( sanitize_key( $row['status'] ) ) . '">' . esc_html( $row['status'] ) . '</span></td><td>' . esc_html( $row['order_id'] ?: 'Checkout not created' ) . '</td><td>' . ( $row['order_id'] ? $refresh : '—' ) . '</td></tr>';
+            echo '<tr><td>' . esc_html( $row['id'] ) . '<br>' . esc_html( $row['created_at'] ) . '</td><td>' . esc_html( self::donation_label( (int) $row['campaign_id'] ) ) . '</td><td>' . esc_html( $user ? $user->display_name : 'Guest or deleted account' ) . '</td><td>' . esc_html( self::money( (int) $row['amount'], $row['currency'] ) ) . '<br>' . esc_html( self::money( (int) $row['refunded'], $row['currency'] ) ) . ' refunded<br>' . esc_html( self::money( (int) $row['fee_contribution'], $row['currency'] ) . ' processing-cost contribution' ) . '</td><td>' . esc_html( $fee_detail ) . '</td><td>' . '<span class="icpa-ledger-status status-' . esc_attr( sanitize_key( $row['status'] ) ) . '">' . esc_html( $row['status'] ) . '</span></td><td>' . esc_html( $row['order_id'] ?: 'Checkout not created' ) . '</td><td>' . ( $row['order_id'] ? $refresh : '—' ) . '</td></tr>';
         }
         if ( ! $rows ) { echo '<tr><td colspan="8">No donations in this environment yet.</td></tr>'; }
         echo '</tbody></table>' . wp_kses_post( paginate_links( array( 'base' => add_query_arg( 'paged', '%#%' ), 'format' => '', 'current' => $page, 'total' => (int) ceil( $count / 25 ) ) ) ) . '</div>';
@@ -272,11 +276,15 @@ final class ICPA_Platform {
             wp_dropdown_pages( array( 'name' => self::OPTION . '[' . $key . ']', 'id' => $key, 'selected' => $o[$key], 'show_option_none' => 'Select a page', 'option_none_value' => 0 ) );
             echo '</td></tr>';
         }
-        echo '</table><h2>Optional processing-cost contributions</h2><p>For one-time donations only. Donors choose donation only or an additional estimated contribution. Enter the processing rate from your Square agreement; this does not fetch your actual rate from Square. The estimate includes processing on the total charge and rounds up to the next cent. Campaign totals exclude the extra contribution.</p><table class="form-table"><tr><th>Offer contribution choice</th><td><input type="hidden" name="' . esc_attr( self::OPTION ) . '[fee_enabled]" value="0"><label><input type="checkbox" name="' . esc_attr( self::OPTION ) . '[fee_enabled]" value="1" ' . checked( $o['fee_enabled'], 1, false ) . '> Let donors choose; off by default</label></td></tr>';
+        echo '</table><h2>Processing fee handling</h2><fieldset class="icpa-fee-mode-picker"><legend>Choose how this form handles processing costs</legend><div class="icpa-fee-mode-buttons">';
+        foreach ( array( 'absorb' => 'Absorb fees', 'pass_on' => 'Add to donation', 'customer_choice' => 'Donor chooses' ) as $value => $label ) {
+            echo '<label><input type="radio" name="' . esc_attr( self::OPTION ) . '[fee_mode]" value="' . esc_attr( $value ) . '" ' . checked( ICPA_Fees::mode(), $value, false ) . '><span>' . esc_html( $label ) . '</span></label>';
+        }
+        echo '</div><p data-fee-mode-description aria-live="polite"></p><noscript>Absorb fees: donor pays only the donation. Add to donation: configured estimated costs are included in the total. Donor chooses: donor may add the estimated contribution.</noscript></fieldset><p>For one-time donations only. Enter your agreed processing rate below; this is an estimate and may differ from Square’s actual fee. Campaign progress excludes the additional contribution.</p><table class="form-table">';
         foreach ( array( 'fee_percent' => array( 'Estimated percentage (%)', $o['fee_bps'], '10' ), 'fee_fixed_amount' => array( 'Estimated fixed amount (' . $o['currency'] . ')', $o['fee_fixed'], '10' ) ) as $field => $item ) {
             echo '<tr><th><label for="' . esc_attr( $field ) . '">' . esc_html( $item[0] ) . '</label></th><td><input id="' . esc_attr( $field ) . '" type="number" min="0" max="' . esc_attr( $item[2] ) . '" step="0.01" name="' . esc_attr( self::OPTION ) . '[' . esc_attr( $field ) . ']" value="' . esc_attr( number_format( $item[1] / 100, 2, '.', '' ) ) . '"></td></tr>';
         }
-        echo '</table><p>Use <code>[icpa_donation_form fees="off"]</code> to hide the choice on a specific form, or <code>fees="optional"</code> to offer it when enabled above. Leaving the checkbox off means ICPA absorbs processing fees.</p>';
+        echo '</table><p>Use <code>[icpa_donation_form fees="off"]</code> to hide the choice on a specific form, or <code>fees="optional"</code> to offer it when enabled above. The selected button is the default. Use fees="off", fees="optional" or fees="pass_on" for individual forms; overrides that add costs require a non-absorb global mode and configured rates.</p>';
         echo '<h2>Website appearance</h2><p>Use your existing WordPress theme to keep the website header, footer, logo and typography. Standalone mode uses the plugin’s full-width layout.</p><table class="form-table"><tr><th><label for="icpa-layout">Layout</label></th><td><select id="icpa-layout" name="' . esc_attr( self::OPTION ) . '[layout]"><option value="theme" ' . selected( $o['layout'], 'theme', false ) . '>Use my website theme (recommended)</option><option value="standalone" ' . selected( $o['layout'], 'standalone', false ) . '>Standalone fundraising pages</option></select></td></tr>';
         foreach ( array( 'primary_color' => 'Button and accent colour', 'heading_color' => 'Heading and text colour', 'intro_title' => 'Donation page heading', 'intro_text' => 'Donation page introduction', 'hero_image_id' => 'Banner image (Media Library ID)' ) as $key => $label ) {
             echo '<tr><th><label for="icpa-' . esc_attr( $key ) . '">' . esc_html( $label ) . '</label></th><td><input class="regular-text" id="icpa-' . esc_attr( $key ) . '" type="' . ( 'hero_image_id' === $key ? 'number' : 'text' ) . '" name="' . esc_attr( self::OPTION ) . '[' . esc_attr( $key ) . ']" value="' . esc_attr( $o[$key] ) . '">';

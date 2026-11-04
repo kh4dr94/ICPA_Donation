@@ -86,6 +86,15 @@ const fs = require('fs');
         await page.addScriptTag({content:script});
         await page.waitForFunction(() => document.querySelector('.icpa-card-status').textContent.includes('unavailable'));
         if (!(await page.getByRole('button',{name:'Donate',exact:true}).isDisabled())) throw Error('SDK load failure must disable payment');
+        await page.setContent('<meta charset="utf-8"><style>' + fs.readFileSync('icpa-fundraising/assets/fee-settings.css','utf8') + '</style>' + fs.readFileSync('/tmp/icpa-fee-settings.html','utf8'));
+        await page.addScriptTag({content:fs.readFileSync('icpa-fundraising/assets/fee-settings.js','utf8')});
+        await page.getByText('Add to donation',{exact:true}).click();
+        if (!(await page.locator('[name="icpa_fundraising_settings[fee_mode]"][value="pass_on"]').isChecked())) throw Error('Add-to-donation button failed');
+        if (!(await page.locator('[data-fee-mode-description]').textContent()).includes('full total')) throw Error('Fee explanation must update');
+        await page.getByText('Donor chooses',{exact:true}).click();
+        const selectedMode = page.locator('[name="icpa_fundraising_settings[fee_mode]"][value="customer_choice"]');
+        if (!(await selectedMode.isChecked()) || await selectedMode.evaluate(input => getComputedStyle(input.nextElementSibling).backgroundColor) !== 'rgb(40, 28, 70)') throw Error('Selected fee mode should be highlighted');
+        await page.locator('.icpa-fee-mode-picker').screenshot({path:'preview/fee-handling-settings.png'});
         console.log('PASS: individual field ticks, aggregate card validation, prominent payment confirmation, live card-completeness feedback, readable selected amount under theme overrides, embedded card browser flow, buyer verification details, safe retry token reuse, locked amount, success state, escaped errors and SDK failure (SDK mocked)');
     } finally { await browser.close(); }
 })().catch(error => {console.error(error);process.exit(1);});

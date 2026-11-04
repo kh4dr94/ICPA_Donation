@@ -13,13 +13,13 @@ for key, value in list(data.items()):
         svg = base64.b64encode((root / f'icpa-fundraising/assets/{name}.svg').read_bytes()).decode()
         value = re.sub(r'https?://localhost[^\"\s]*/icpa-fundraising/assets/' + name + r'\.svg', lambda _: f'data:image/svg+xml;base64,{svg}', value)
     data[key] = value
-css = (root / 'icpa-fundraising/assets/platform.css').read_text()
+css = (root / 'icpa-fundraising/assets/platform.css').read_text() + (root / 'icpa-fundraising/assets/fee-settings.css').read_text()
 geometry = base64.b64encode((root / 'icpa-fundraising/assets/geometry.svg').read_bytes()).decode()
 css = css.replace('url("geometry.svg")', f'url("data:image/svg+xml;base64,{geometry}")')
 for name in ('Regular', 'SemiBold', 'Bold'):
     font = base64.b64encode((root / f'icpa-fundraising/assets/fonts/Poppins-{name}.ttf').read_bytes()).decode()
     css = css.replace(f'url("fonts/Poppins-{name}.ttf")', f'url("data:font/ttf;base64,{font}")')
-plugin_js = (root / 'icpa-fundraising/assets/platform.js').read_text()
+plugin_js = (root / 'icpa-fundraising/assets/platform.js').read_text() + (root / 'icpa-fundraising/assets/fee-settings.js').read_text()
 payload = json.dumps(data).replace('</', '<\\/')
 shell = '''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ICPA Fundraising — interactive demo</title><style>
 body{margin:0;background:#fff}#app{font-family:"ICPA Poppins",Poppins,Arial,sans-serif;max-width:1200px;margin:0 auto;padding:0 28px}.demo-bar{font:12px/1.5 system-ui,sans-serif;background:#173b30;color:#fff;padding:10px 24px;display:flex;justify-content:space-between;align-items:center;gap:12px}.demo-bar strong{font-weight:650}.demo-shortcuts{display:flex;gap:14px;flex-wrap:wrap}.demo-shortcuts button{font:inherit;color:#fff;background:none;border:0;cursor:pointer;padding:4px}.demo-shortcuts button:focus-visible{outline:2px solid #fff}.demo-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#173b30;color:#fff;padding:18px 22px;border-radius:12px;font:14px/1.6 system-ui,sans-serif;box-shadow:0 8px 40px #0003;max-width:560px;width:calc(100% - 40px);z-index:20}.demo-toast[hidden]{display:none}.demo-toast button{color:white;background:none;border:0;float:right;font-size:20px;cursor:pointer;margin-left:15px}@media(max-width:650px){.demo-bar{align-items:flex-start;flex-direction:column;padding:10px 18px}.demo-shortcuts{gap:12px}}

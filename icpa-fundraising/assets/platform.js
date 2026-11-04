@@ -33,7 +33,7 @@
         const amount = form.elements.amount;
         if (!amount || !/^\d{1,7}(?:\.\d{1,2})?$/.test(amount.value) || !amount.validity.valid) return null;
         const donation = Math.round(Number(amount.value) * 100);
-        const cover = form.querySelector('[name="cover_fees"]:checked');
+        const cover = form.elements.cover_fees;
         const bps = Number(form.dataset.feeBps || 0), fixed = Number(form.dataset.feeFixed || 0);
         const total = cover && cover.value === '1' ? Math.ceil((donation + fixed) * 10000 / (10000 - bps)) : donation;
         return {donation: donation, fee: total - donation, total: total};

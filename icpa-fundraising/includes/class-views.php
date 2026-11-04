@@ -54,7 +54,7 @@ final class ICPA_Views {
         $id = wp_unique_id( 'icpa-amount-' );
         $profile = ICPA_Square_Settings::profile();
         $embedded = ! empty( $profile['application_id'] );
-        $allow_fees = $allow_fees && ICPA_Fees::enabled();
+        $fee_policy = ICPA_Fees::policy( $allow_fees );
         if ( $embedded ) {
             wp_enqueue_script( 'icpa-square-web', 'production' === $o['mode'] ? 'https://web.squarecdn.com/v1/square.js' : 'https://sandbox.web.squarecdn.com/v1/square.js', array(), null, true );
             wp_enqueue_script( 'icpa-card-payment', plugins_url( 'assets/card-payment.js', ICPA_FUNDRAISING_FILE ), array( 'icpa-square-web', 'icpa-fundraising' ), ICPA_Platform::VERSION, true );
@@ -63,7 +63,7 @@ final class ICPA_Views {
         ob_start();
         ?>
         <?php if ( $campaign || ICPA_Recurring::options()['one_time'] ) { ?>
-        <form action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" method="post" class="icpa-donation-form" data-currency="<?php echo esc_attr( $o['currency'] ); ?>" data-fee-bps="<?php echo esc_attr( $o['fee_bps'] ); ?>" data-fee-fixed="<?php echo esc_attr( $o['fee_fixed'] ); ?>"<?php if ( $embedded ) { ?> data-card-payment="1" data-app-id="<?php echo esc_attr( $profile['application_id'] ); ?>" data-location-id="<?php echo esc_attr( $profile['location_id'] ); ?>" data-endpoint="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>"<?php } ?>>
+        <form action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" method="post" class="icpa-donation-form" data-currency="<?php echo esc_attr( $o['currency'] ); ?>" data-fee-policy="<?php echo esc_attr( $fee_policy ); ?>" data-fee-bps="<?php echo esc_attr( $o['fee_bps'] ); ?>" data-fee-fixed="<?php echo esc_attr( $o['fee_fixed'] ); ?>"<?php if ( $embedded ) { ?> data-card-payment="1" data-app-id="<?php echo esc_attr( $profile['application_id'] ); ?>" data-location-id="<?php echo esc_attr( $profile['location_id'] ); ?>" data-endpoint="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>"<?php } ?>>
             <input type="hidden" name="action" value="icpa_checkout"><input type="hidden" name="environment" value="<?php echo esc_attr( $o['mode'] ); ?>"><input type="hidden" name="campaign_id" value="<?php echo esc_attr( $campaign ); ?>"><input type="hidden" name="checkout_key" value="<?php echo esc_attr( wp_generate_uuid4() ); ?>"><?php wp_nonce_field( 'icpa_checkout' ); ?><input type="hidden" name="fee_quote" value="<?php echo esc_attr( ICPA_Fees::quote( $campaign, $allow_fees ) ); ?>">
             <?php if ( $embedded ) { ?>
             <section class="icpa-payment-result" role="status" aria-live="polite" tabindex="-1" hidden>
@@ -88,17 +88,17 @@ final class ICPA_Views {
             <p class="icpa-card-validity icpa-small" role="status" aria-live="polite" hidden></p>
             <p class="icpa-card-status icpa-small" role="status" aria-live="polite">Loading secure card form…</p><noscript>JavaScript is required for secure card payments.</noscript>
             <?php } ?>
-            <?php if ( $allow_fees ) { ?>
+            <?php if ( 1 === $fee_policy ) { ?>
             <fieldset class="icpa-fee-options"><legend>Processing costs</legend>
                 <label><input type="radio" name="cover_fees" value="0" checked> Donate my chosen amount only</label>
                 <label><input type="radio" name="cover_fees" value="1"> Add an estimated contribution towards processing costs</label>
                 <p class="icpa-small">Optional. The estimate uses ICPA’s configured rate; Square’s actual processing fee may differ.</p>
-            </fieldset><?php } ?>
+            </fieldset><?php } elseif ( 2 === $fee_policy ) { ?><input type="hidden" name="cover_fees" value="1"><p class="icpa-fee-included">This form adds an estimated processing-cost contribution. Review the total below before donating.</p><?php } ?>
             <section class="icpa-donation-summary" aria-label="Donation breakdown" aria-live="polite">
                 <div><span>Donation</span><strong data-summary-donation>Choose an amount</strong></div>
                 <div><span>Processing-cost contribution</span><strong data-summary-fee>—</strong></div>
                 <div class="icpa-summary-total"><span>Total you pay</span><strong data-summary-total>Choose an amount</strong></div>
-                <p class="icpa-small">Any contribution is optional and goes to ICPA. Square’s actual fee is deducted from ICPA’s payment; it is not an extra charge added by Square at checkout.</p>
+                <p class="icpa-small"><?php echo 2 === $fee_policy ? 'The processing-cost contribution shown is included in your total and goes to ICPA.' : 'Any contribution is optional and goes to ICPA.'; ?> Square’s actual fee is deducted from ICPA’s payment; it is not an extra charge added by Square at checkout.</p>
             </section>
             <button class="icpa-btn" type="submit"<?php if ( $embedded ) { ?> disabled<?php } ?>>Donate</button>
             <p class="icpa-small"><?php echo $embedded ? 'One-time donation. Card details are securely handled by Square.' : 'One-time donation. You’ll complete payment on Square.'; ?> <?php if ( ! is_user_logged_in() && $o['account_page'] ) { ?><a href="<?php echo esc_url( wp_login_url( $return ) ); ?>">Sign in first</a> to save it to your donor account.<?php } ?></p>
@@ -109,7 +109,7 @@ final class ICPA_Views {
     }
 
     public static function general_form( $atts = array() ) {
-        $atts = shortcode_atts( array( 'campaign' => 0, 'appearance' => 'card', 'fees' => 'optional' ), $atts, 'icpa_donation_form' );
+        $atts = shortcode_atts( array( 'campaign' => 0, 'appearance' => 'card', 'fees' => 'inherit' ), $atts, 'icpa_donation_form' );
         $campaign = absint( $atts['campaign'] );
         $o = ICPA_Platform::options();
         if ( $campaign ? ! ICPA_Platform::open( $campaign ) : ! $o['general_enabled'] ) { return '<div class="icpa-info">This donation option is currently unavailable.</div>'; }
@@ -117,7 +117,7 @@ final class ICPA_Views {
         echo self::wrapper() . self::mode_notice();
         ?><section class="icpa-general-widget <?php echo 'minimal' === $atts['appearance'] ? 'icpa-widget-minimal' : 'icpa-widget-card'; ?>" aria-label="Make a donation"><span class="icpa-eyebrow">Giving back to the community</span><h2><?php echo esc_html( $campaign ? get_the_title( $campaign ) : $o['donation_title'] ); ?></h2><p><?php echo $campaign || ICPA_Recurring::options()['one_time'] ? 'Choose a suggested amount or enter your own. Every donation goes to ICPA.' : 'Choose a recurring gift below. Every donation goes to ICPA.'; ?></p>
         <?php if ( isset( $_GET['icpa_return'] ) ) { ?><div class="icpa-info" role="status">Welcome back. Payment is confirmed only when Square verifies it. Returning here alone does not confirm a donation.</div><?php } ?>
-        <?php echo ICPA_Square::ready() ? self::donation_form( $campaign, 'off' !== $atts['fees'] ) : '<div class="icpa-info">Donations will open once ICPA connects Square.</div>'; ?>
+        <?php echo ICPA_Square::ready() ? self::donation_form( $campaign, $atts['fees'] ) : '<div class="icpa-info">Donations will open once ICPA connects Square.</div>'; ?>
         <div class="icpa-recipient"><strong><?php echo $campaign ? 'Campaign donation' : 'General donation to ICPA'; ?></strong><p><?php echo $campaign ? 'ICPA receives donations and manages this campaign’s distribution of funds.' : 'This supports ICPA’s work without being assigned to a particular campaign.'; ?></p></div></section></div>
         <?php return ob_get_clean();
     }

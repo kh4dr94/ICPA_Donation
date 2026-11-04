@@ -1,6 +1,7 @@
 <?php
 /** Disposable WordPress only. Square HTTP mocked; no real payments. */
 require '/var/www/html/wp-load.php';
+require_once ABSPATH . 'wp-admin/includes/template.php';
 $checks = 0;
 function fee_check( $ok, $message ) { global $checks; if ( ! $ok ) throw new RuntimeException( $message ); ++$checks; }
 $admin = get_users( array( 'role' => 'administrator', 'number' => 1 ) )[0]->ID; wp_set_current_user( $admin );
@@ -52,6 +53,21 @@ fee_check( is_wp_error( ICPA_Square::processing_fee( array( 'processing_fee' => 
 fee_check( is_wp_error( ICPA_Square::processing_fee( array( 'processing_fee' => array( array( 'amount_money' => array( 'amount' => '86', 'currency' => 'AUD' ) ) ) ), 'AUD' ) ), 'Non-integer provider fee rejected' );
 $confirmation = ICPA_Square::payment_confirmation( $row, 'completed' );
 fee_check( 'AUD $25.00' === $confirmation['donation'] && 'AUD $0.87' === $confirmation['contribution'] && 'AUD $25.87' === $confirmation['amount'], 'Confirmation shows authoritative breakdown' );
+$o = ICPA_Platform::options(); $o['fee_mode'] = 'pass_on'; update_option( ICPA_Platform::OPTION, $o );
+$forced = ICPA_Fees::quote( 0, true );
+fee_check( 2587 === ICPA_Fees::calculate( 2500, 0, '1', $forced )['total'], 'Add-to-donation mode calculates full disclosed charge' );
+fee_check( is_wp_error( ICPA_Fees::calculate( 2500, 0, '0', $forced ) ), 'Cannot remove required contribution by tampering with posted choice' );
+fee_check( is_wp_error( ICPA_Fees::calculate( 2500, 0, '0', '' ) ), 'Cannot bypass add-to-donation mode by omitting signed policy' );
+fee_check( 2500 === ICPA_Fees::calculate( 2500, 0, '0', ICPA_Fees::quote( 0, false ) )['total'], 'Explicit fee-off form remains a valid signed override' );
+$html = ICPA_Views::general_form();
+fee_check( false !== strpos( $html, 'type="hidden" name="cover_fees" value="1"' ) && false !== strpos( $html, 'icpa-fee-included' ), 'Added processing cost is disclosed before payment' );
+fee_check( false !== strpos( ICPA_Views::general_form( array( 'fees' => 'optional' ) ), 'name="cover_fees" value="0" checked' ), 'Explicit optional form offers customer choice even when default adds costs' );
+$o['fee_mode'] = 'absorb'; update_option( ICPA_Platform::OPTION, $o );
+fee_check( ! ICPA_Fees::enabled() && 2500 === ICPA_Fees::calculate( 2500, 0, '0' )['total'], 'Absorb mode charges only donation amount' );
+fee_check( is_wp_error( ICPA_Fees::calculate( 2500, 0, '1', $forced ) ), 'Old add-to-donation policy invalid after mode changes' );
+ob_start(); ICPA_Platform::settings_page(); $settings_html = ob_get_clean();
+fee_check( 3 === substr_count( $settings_html, 'name="icpa_fundraising_settings[fee_mode]"' ), 'Admin selector offers three real radio buttons' );
+file_put_contents( '/tmp/icpa-fee-settings.html', $settings_html );
 $wpdb->delete( ICPA_Platform::table(), array( 'id' => $row['id'] ) ); wp_delete_post( $campaign, true );
 update_option( ICPA_Platform::OPTION, $old_options ); if ( false === $old_profiles ) delete_option( ICPA_Square_Settings::OPTION ); else update_option( ICPA_Square_Settings::OPTION, $old_profiles );
 echo 'PASS: ' . $checks . " fee-consent, calculation, reporting and campaign-accounting checks (Square mocked)\n";

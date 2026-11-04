@@ -60,6 +60,7 @@ dlocal exec "$task_wp" php /test/recurring-integration.php
 dlocal exec "$task_wp" php /test/security-integration.php
 dlocal exec "$task_wp" php /test/fees-integration.php
 dlocal cp "$task_wp:/tmp/icpa-fee-view.html" /tmp/icpa-fee-view.html
+dlocal cp "$task_wp:/tmp/icpa-fee-settings.html" /tmp/icpa-fee-settings.html
 dlocal exec "$task_wp" php /test/card-integration.php
 dlocal cp "$task_wp:/tmp/icpa-card-view.html" /tmp/icpa-card-view.html
 dlocal exec -e ICPA_RUN_DEMO=1 "$task_wp" php /test/platform-demo.php || { dlocal logs --tail 60 "$task_wp"; exit 1; }

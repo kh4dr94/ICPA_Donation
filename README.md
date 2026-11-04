@@ -2,7 +2,7 @@
 
 ## Download and install
 
-Version 0.9.0 adds required-field asterisks, a live donation/contribution/total breakdown, optional processing-cost contributions configurable per form, and actual Square fee reporting in the admin ledger. Contributions are optional, off by default, calculated from administrator-supplied estimates and excluded from campaign progress.
+Version 0.9.1 adds a three-button fee selector: Absorb fees, Add to donation and Donor chooses. Version 0.9.0 introduced required-field asterisks, a live donation/contribution/total breakdown, optional processing-cost contributions configurable per form, and actual Square fee reporting in the admin ledger. Contributions are optional, off by default, calculated from administrator-supplied estimates and excluded from campaign progress.
 
 [Download the ICPA Fundraising plugin ZIP](https://github.com/kh4dr94/ICPA_Donation/raw/refs/heads/main/icpa-fundraising.zip), then upload it in WordPress under **Plugins → Add New → Upload Plugin** and activate it. Upload this plugin ZIP, rather than GitHub's source-code ZIP of the whole repository.
 
