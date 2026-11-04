@@ -30,6 +30,10 @@ const fs = require('fs');
             if (await page.locator('[data-card-field="' + field + '"]').getAttribute('data-state') !== 'complete') throw Error('Per-field card tick missing');
         }
         if (!(await page.locator('.icpa-card-validity').textContent()).includes('✓ Card details complete')) throw Error('Complete card indicator missing');
+        await emit('postalCode', {isEmpty:false,isCompletelyValid:false,isPotentiallyValid:true,hasErrorClass:true});
+        if (await page.locator('[data-card-field="postalCode"]').getAttribute('data-state') !== 'invalid') throw Error('Square postcode error must show red even if input is potentially valid');
+        await emit('postalCode', {isEmpty:false,isCompletelyValid:true,isPotentiallyValid:true,hasErrorClass:false});
+        if (await page.locator('[data-card-field="postalCode"]').getAttribute('data-state') !== 'complete') throw Error('Corrected postcode must recover its green check');
         await emit('cvv', {isEmpty:false,isCompletelyValid:false,isPotentiallyValid:false});
         if (await page.locator('[data-card-field="cvv"]').getAttribute('data-state') !== 'invalid') throw Error('Edited invalid CVV must lose its tick');
         if (!(await page.locator('.icpa-card-validity').textContent()).includes('Check the highlighted')) throw Error('Invalid card indicator missing');

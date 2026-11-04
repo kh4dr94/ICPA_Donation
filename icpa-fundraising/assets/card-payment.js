@@ -88,7 +88,8 @@
                 const indicator = Array.from(form.querySelectorAll('[data-card-field]')).find(node => node.dataset.cardField === detail.field);
                 if (!indicator) { return; }
                 const state = detail.currentState;
-                const value = state.isEmpty ? 'empty' : (state.isCompletelyValid ? 'complete' : (state.isPotentiallyValid === false ? 'invalid' : 'incomplete'));
+                const invalidField = state.hasErrorClass === true || detail.eventType === 'errorClassAdded' || state.isPotentiallyValid === false;
+                const value = invalidField ? 'invalid' : (state.isEmpty ? 'empty' : (state.isCompletelyValid ? 'complete' : 'incomplete'));
                 cardStates[detail.field] = value;
                 indicator.dataset.state = value;
                 indicator.querySelector('.icpa-check-icon').textContent = value === 'complete' ? '✓' : (value === 'invalid' ? '!' : '○');

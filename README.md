@@ -2,7 +2,7 @@
 
 ## Download and install
 
-Version 0.8.0 improves the donation form with clearer typography, numbered sections, responsive name fields and a minimal page-builder appearance. Square connections now discovers locations by name for each environment. The donation ledger adds summary cards and status badges. All administration stays under **ICPA Donations**.
+Version 0.8.1 synchronizes individual card indicators with Square’s displayed field errors. Version 0.8.0 improves the donation form with clearer typography, numbered sections, responsive name fields and a minimal page-builder appearance. Square connections now discovers locations by name for each environment. The donation ledger adds summary cards and status badges. All administration stays under **ICPA Donations**.
 
 [Download the ICPA Fundraising plugin ZIP](https://github.com/kh4dr94/ICPA_Donation/raw/refs/heads/main/icpa-fundraising.zip), then upload it in WordPress under **Plugins → Add New → Upload Plugin** and activate it. Upload this plugin ZIP, rather than GitHub's source-code ZIP of the whole repository.
 
