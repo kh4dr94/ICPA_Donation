@@ -1,0 +1,57 @@
+<?php
+/** Disposable WordPress only. Square HTTP mocked; no real payments. */
+require '/var/www/html/wp-load.php';
+$checks = 0;
+function fee_check( $ok, $message ) { global $checks; if ( ! $ok ) throw new RuntimeException( $message ); ++$checks; }
+$admin = get_users( array( 'role' => 'administrator', 'number' => 1 ) )[0]->ID; wp_set_current_user( $admin );
+$old_options = get_option( ICPA_Platform::OPTION ); $old_profiles = get_option( ICPA_Square_Settings::OPTION );
+update_option( ICPA_Platform::OPTION, array( 'mode' => 'sandbox', 'currency' => 'AUD', 'fee_enabled' => 1, 'fee_bps' => 220, 'fee_fixed' => 30 ) );
+ICPA_Square_Settings::save( array( 'sandbox' => array( 'location_id' => 'fee-location', 'application_id' => 'sandbox-fee-fixture', 'access_token' => 'fee-access-fixture-token', 'signature_key' => 'fee-signature-fixture-key' ) ) );
+$quote = ICPA_Fees::quote( 0, true );
+fee_check( 30 === ICPA_Fees::decimal_hundredths( '0.30' ) && 50 === ICPA_Fees::decimal_hundredths( '0.50' ), 'Fixed cents and sub-one-percent rates parse correctly' );
+fee_check( null === ICPA_Fees::decimal_hundredths( array( 'invalid' ) ), 'Malformed configured rate is rejected' );
+$breakdown = ICPA_Fees::calculate( 2500, 0, '1', $quote );
+fee_check( array( 'donation' => 2500, 'fee' => 87, 'total' => 2587 ) === $breakdown, 'Gross-up estimate uses exact cents and rounds up' );
+fee_check( 2500 === ICPA_Fees::calculate( 2500, 0 )['total'], 'Default donation-only option does not add anything' );
+fee_check( is_wp_error( ICPA_Fees::calculate( 2500, 0, '1', ICPA_Fees::quote( 0, false ) ) ), 'Fee-disabled form cannot be forged into accepting contributions' );
+fee_check( is_wp_error( ICPA_Fees::calculate( 2500, 1, '1', $quote ) ), 'Quote bound to campaign' );
+fee_check( is_wp_error( ICPA_Fees::calculate( 2500, 0, array(1), $quote ) ), 'Malformed choice rejected' );
+fee_check( is_wp_error( ICPA_Fees::calculate( 2500, 0, '1', substr( $quote, 0, -1 ) . ( substr( $quote, -1 ) === '0' ? '1' : '0' ) ) ), 'Tampered signature rejected' );
+$o = ICPA_Platform::options(); $o['fee_bps'] = 230; update_option( ICPA_Platform::OPTION, $o );
+fee_check( is_wp_error( ICPA_Fees::calculate( 2500, 0, '1', $quote ) ), 'Changed rates invalidate stale quotes' );
+$o['fee_bps'] = 220; update_option( ICPA_Platform::OPTION, $o );
+fee_check( is_wp_error( ICPA_Fees::calculate( $o['maximum_amount'], 0, '1', $quote ) ), 'Total charge cannot exceed configured maximum' );
+$html = ICPA_Views::general_form();
+file_put_contents( '/tmp/icpa-fee-view.html', ICPA_Views::donation_form() );
+fee_check( false !== strpos( $html, 'name="cover_fees" value="0" checked' ) && false !== strpos( $html, 'icpa-donation-summary' ), 'Optional choice defaults to donation only and includes breakdown' );
+fee_check( substr_count( $html, 'icpa-required"' ) >= 9, 'Required donation and card sections have accessible red markers' );
+fee_check( false === strpos( ICPA_Views::general_form( array( 'fees' => 'off' ) ), 'name="cover_fees"' ), 'Specific forms can disable contribution choice' );
+$captured = array();
+add_filter( 'pre_http_request', function ( $pre, $args, $url ) use ( &$captured ) {
+    $body = json_decode( $args['body'], true ); $captured[] = $body;
+    return array( 'response' => array( 'code' => 200 ), 'headers' => array(), 'body' => wp_json_encode( array( 'payment_link' => array( 'order_id' => 'fee-order-' . $body['idempotency_key'], 'url' => 'https://sandbox.square.link/u/fee-fixture' ) ) ) );
+}, 10, 3 );
+$campaign = wp_insert_post( array( 'post_type' => ICPA_Platform::TYPE, 'post_status' => 'publish', 'post_title' => 'Fee test campaign' ) ); update_post_meta( $campaign, '_icpa_goal', 100000 );
+$key = wp_generate_uuid4(); $quote = ICPA_Fees::quote( $campaign, true );
+fee_check( is_string( ICPA_Square::create_checkout( $campaign, '25.00', $key, false, '1', $quote ) ), 'Hosted checkout supports optional contribution' );
+fee_check( 2 === count( $captured[0]['order']['line_items'] ) && 2500 === $captured[0]['order']['line_items'][0]['base_price_money']['amount'] && 87 === $captured[0]['order']['line_items'][1]['base_price_money']['amount'], 'Square checkout receives separate donation and contribution line items' );
+global $wpdb; $row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . ICPA_Platform::table() . ' WHERE checkout_key=%s', $key ), ARRAY_A );
+fee_check( 2587 === (int) $row['amount'] && 2500 === (int) $row['donation_amount'] && 87 === (int) $row['fee_contribution'], 'Ledger distinguishes total charge, donation and voluntary contribution' );
+fee_check( is_wp_error( ICPA_Square::create_checkout( $campaign, '25.00', $key, false, '0' ) ), 'Changed fee choice cannot reuse a payment attempt' );
+$payment = array( 'id' => 'fee-payment-fixture', 'order_id' => $row['order_id'], 'location_id' => 'fee-location', 'amount_money' => array( 'amount' => 2587, 'currency' => 'AUD' ), 'status' => 'COMPLETED', 'updated_at' => '2026-11-04T04:00:00Z', 'processing_fee' => array( array( 'amount_money' => array( 'amount' => 86, 'currency' => 'AUD' ) ) ) );
+fee_check( true === ICPA_Square::apply_payment( $payment, 'sandbox' ), 'Full charge is verified before marking donation completed' );
+fee_check( 2500 === (int) ICPA_Platform::stats( $campaign )['raised'], 'Campaign progress excludes voluntary contribution' );
+$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . ICPA_Platform::table() . ' WHERE checkout_key=%s', $key ), ARRAY_A );
+fee_check( 86 === (int) $row['processing_fee'], 'Stores actual Square fee independently from estimate' );
+$payment['refunded_money'] = array( 'amount' => 1000, 'currency' => 'AUD' ); $payment['updated_at'] = '2026-11-04T04:30:00Z';
+fee_check( true === ICPA_Square::apply_payment( $payment, 'sandbox' ) && 1533 === (int) ICPA_Platform::stats( $campaign )['raised'], 'Partial refunds reduce base donation proportionally without counting contribution' );
+$payment['refunded_money'] = array( 'amount' => 2587, 'currency' => 'AUD' ); $payment['updated_at'] = '2026-11-04T05:00:00Z';
+fee_check( true === ICPA_Square::apply_payment( $payment, 'sandbox' ) && 0 === (int) ICPA_Platform::stats( $campaign )['raised'], 'Full refund removes campaign progress' );
+fee_check( null === ICPA_Square::processing_fee( array(), 'AUD' ), 'Missing fee means unreported rather than zero' );
+fee_check( is_wp_error( ICPA_Square::processing_fee( array( 'processing_fee' => array( array( 'amount_money' => array( 'amount' => 10, 'currency' => 'USD' ) ) ) ), 'AUD' ) ), 'Wrong-currency reporting data rejected' );
+fee_check( is_wp_error( ICPA_Square::processing_fee( array( 'processing_fee' => array( array( 'amount_money' => array( 'amount' => '86', 'currency' => 'AUD' ) ) ) ), 'AUD' ) ), 'Non-integer provider fee rejected' );
+$confirmation = ICPA_Square::payment_confirmation( $row, 'completed' );
+fee_check( 'AUD $25.00' === $confirmation['donation'] && 'AUD $0.87' === $confirmation['contribution'] && 'AUD $25.87' === $confirmation['amount'], 'Confirmation shows authoritative breakdown' );
+$wpdb->delete( ICPA_Platform::table(), array( 'id' => $row['id'] ) ); wp_delete_post( $campaign, true );
+update_option( ICPA_Platform::OPTION, $old_options ); if ( false === $old_profiles ) delete_option( ICPA_Square_Settings::OPTION ); else update_option( ICPA_Square_Settings::OPTION, $old_profiles );
+echo 'PASS: ' . $checks . " fee-consent, calculation, reporting and campaign-accounting checks (Square mocked)\n";

@@ -4,13 +4,13 @@ const fs = require('fs');
     const browser = await chromium.launch({executablePath:'/usr/bin/chromium', args:['--no-sandbox']});
     try {
         const page = await browser.newPage();
-        const html = fs.readFileSync('/tmp/icpa-card-view.html', 'utf8');
+        const html = fs.readFileSync('/tmp/icpa-fee-view.html', 'utf8');
         const script = fs.readFileSync('icpa-fundraising/assets/card-payment.js', 'utf8');
         let requests = [], tokenizations = [], fail = true;
         await page.route('**/*', async route => {
             if (route.request().method() === 'POST') {
                 requests.push(new URLSearchParams(route.request().postData()));
-                return route.fulfill({status: fail ? 502 : 200, contentType:'application/json', body: JSON.stringify(fail ? {success:false,data:{message:'Retry this attempt <script>unsafe</script>'}} : {success:true,data:{status:'completed',title:'Test donation completed',message:'Your test payment was confirmed. No real money was charged.',amount:'AUD $25.50',reference:'ICPA-42'}})});
+                return route.fulfill({status: fail ? 502 : 200, contentType:'application/json', body: JSON.stringify(fail ? {success:false,data:{message:'Retry this attempt <script>unsafe</script>'}} : {success:true,data:{status:'completed',title:'Test donation completed',message:'Your test payment was confirmed. No real money was charged.',amount:'AUD $26.39',donation:'AUD $25.50',contribution:'AUD $0.89',reference:'ICPA-42'}})});
             }
             return route.fulfill({contentType:'text/html', body:'<meta charset="utf-8"><style>' + fs.readFileSync('icpa-fundraising/assets/platform.css','utf8') + '</style><style>button:hover{color:white!important}</style><div class="icpa-platform"><section class="icpa-general-widget"><span class="icpa-eyebrow">Giving back to the community</span><h2>Donate &amp; Support</h2><p>Choose your gift. Every donation supports ICPA and our community.</p>' + html + '</section></div>'});
         });
@@ -43,6 +43,10 @@ const fs = require('fs');
         const selection = await page.locator('.icpa-amounts button').first().evaluate(button => ({pressed:button.getAttribute('aria-pressed'), color:getComputedStyle(button).color, background:getComputedStyle(button).backgroundColor, check:getComputedStyle(button,'::before').content}));
         if (selection.pressed !== 'true' || selection.color !== 'rgb(40, 28, 70)' || selection.background !== 'rgb(255, 242, 197)' || !selection.check.includes('✓')) throw Error('Selected amount must remain readable under theme hover styles: ' + JSON.stringify(selection));
         await page.locator('[name=amount]').fill('25.50');
+        if (!(await page.locator('[data-summary-total]').textContent()).includes('25.50')) throw Error('Default summary must show donation only');
+        await page.locator('[name=cover_fees][value="1"]').check();
+        if (!(await page.locator('[data-summary-fee]').textContent()).includes('0.89') || !(await page.locator('[data-summary-total]').textContent()).includes('26.39')) throw Error('Contribution breakdown must match rounded total');
+        if (await page.locator('.icpa-required').count() < 9) throw Error('Required sections need visible markers');
         await page.locator('[name=first_name]').fill('Test');
         await page.locator('[name=last_name]').fill('Donor');
         await page.locator('[name=email]').fill('test@example.invalid');
@@ -67,15 +71,16 @@ const fs = require('fs');
         await page.getByRole('button',{name:'Donate',exact:true}).click();
         await page.getByRole('heading',{name:'Test donation completed'}).waitFor();
         if (!(await page.locator('.icpa-payment-entry').isHidden())) throw Error('Completed payment must collapse card form');
-        if (!(await page.locator('.icpa-result-amount').textContent()).includes('25.50') || !(await page.locator('.icpa-result-reference').textContent()).includes('ICPA-42')) throw Error('Confirmation details missing');
+        if (!(await page.locator('.icpa-result-amount').textContent()).includes('26.39') || !(await page.locator('.icpa-result-reference').textContent()).includes('ICPA-42')) throw Error('Confirmation details missing');
         if (!(await page.locator('.icpa-result-message').textContent()).includes('No real money')) throw Error('Sandbox success must be explicit');
         if (!(await page.locator('.icpa-payment-result').evaluate(node => node === document.activeElement))) throw Error('Confirmation must receive focus');
         await page.screenshot({path:'preview/donation-success.png',fullPage:true});
         tokenizations = await page.evaluate(() => window.tokenizations);
         if (requests.length !== 2 || tokenizations.length !== 1) throw Error('Retries must not tokenize again');
         if (requests[0].get('checkout_key') !== requests[1].get('checkout_key') || requests[0].get('source_id') !== requests[1].get('source_id')) throw Error('Retry payment identity changed');
-        if (tokenizations[0].amount !== '25.50' || tokenizations[0].currencyCode !== 'AUD' || !tokenizations[0].customerInitiated) throw Error('Buyer verification details missing');
+        if (tokenizations[0].amount !== '26.39' || tokenizations[0].currencyCode !== 'AUD' || !tokenizations[0].customerInitiated) throw Error('Buyer verification details missing');
         if (!(await page.locator('button[type=submit]').isDisabled())) throw Error('Completed donation remains payable');
+        if (requests[0].get('cover_fees') !== '1' || !requests[0].get('fee_quote')) throw Error('Contribution choice and signed form quote missing');
         if (requests[0].has('first_name') || requests[0].has('card_number')) throw Error('Unexpected sensitive fields sent');
         await page.goto('https://donation.example.test');
         await page.addScriptTag({content:script});

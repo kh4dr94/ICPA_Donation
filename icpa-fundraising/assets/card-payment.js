@@ -24,6 +24,9 @@
         form.addEventListener('submit', async function (event) {
             event.preventDefault();
             if (busy || finished || !card || !form.reportValidity()) { return; }
+            const breakdown = window.ICPAFundraising && window.ICPAFundraising.totals(form);
+            if (!breakdown) { status.textContent = 'Enter a valid donation amount.'; return; }
+            if (breakdown.total > Math.round(Number(form.elements.amount.max) * 100)) { status.textContent = 'The total exceeds the donation limit. Reduce your amount or choose donation only.'; return; }
             busy = true;
             button.disabled = true;
             fields().forEach(field => { field.disabled = true; });
@@ -31,7 +34,7 @@
             try {
                 if (!token) {
                     const result = await card.tokenize({
-                        amount: Number(form.elements.amount.value).toFixed(2),
+                        amount: (breakdown.total / 100).toFixed(2),
                         currencyCode: form.dataset.currency,
                         intent: 'CHARGE', customerInitiated: true, sellerKeyedIn: false,
                         billingContact: { givenName: form.elements.first_name.value, familyName: form.elements.last_name.value, email: form.elements.email.value }
@@ -44,7 +47,9 @@
                 }
                 // Explicit field selection: card details never enter this request.
                 const body = new URLSearchParams({ action: 'icpa_card_payment', source_id: token });
-                ['_wpnonce', 'environment', 'campaign_id', 'checkout_key', 'amount', 'email'].forEach(name => body.set(name, form.elements[name].value));
+                ['_wpnonce', 'environment', 'campaign_id', 'checkout_key', 'amount', 'email', 'fee_quote'].forEach(name => body.set(name, form.elements[name].value));
+                const contribution = form.querySelector('[name="cover_fees"]:checked');
+                body.set('cover_fees', contribution ? contribution.value : '0');
                 const response = await fetch(form.dataset.endpoint, { method: 'POST', credentials: 'same-origin', body: body });
                 let result;
                 try { result = await response.json(); } catch (_) { throw new Error('Confirmation is unavailable. Retry this same attempt safely; contact ICPA before starting a new donation.'); }
@@ -59,6 +64,7 @@
                     panel.querySelector('.icpa-result-title').textContent = result.data.title;
                     panel.querySelector('.icpa-result-message').textContent = result.data.message;
                     panel.querySelector('.icpa-result-amount').textContent = result.data.amount;
+                    panel.querySelector('.icpa-result-breakdown').textContent = 'Donation: ' + result.data.donation + ' · Processing-cost contribution: ' + result.data.contribution;
                     panel.querySelector('.icpa-result-reference').textContent = 'Donation reference: ' + result.data.reference;
                     panel.hidden = false;
                     form.querySelector('.icpa-payment-entry').hidden = true;

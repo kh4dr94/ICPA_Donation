@@ -44,44 +44,62 @@ final class ICPA_Views {
         return '<nav class="icpa-nav" aria-label="Fundraising">' . $brand . '<div class="icpa-nav-links">' . $campaign_links . '<a href="' . esc_url( self::url( 'account_page' ) ) . '">My account</a></div></nav>';
     }
 
-    public static function donation_form( $campaign = 0 ) {
+    public static function required_mark() {
+        return '<span class="icpa-required" aria-hidden="true">*</span><span class="icpa-sr-only"> (required)</span>';
+    }
+
+    public static function donation_form( $campaign = 0, $allow_fees = true ) {
         if ( ! $campaign && ! ICPA_Recurring::options()['one_time'] && ! ICPA_Recurring::available() ) { return '<div class="icpa-info">No donation options are available right now. Please contact ICPA.</div>'; }
         $o = ICPA_Platform::options();
         $id = wp_unique_id( 'icpa-amount-' );
         $profile = ICPA_Square_Settings::profile();
         $embedded = ! empty( $profile['application_id'] );
+        $allow_fees = $allow_fees && ICPA_Fees::enabled();
         if ( $embedded ) {
             wp_enqueue_script( 'icpa-square-web', 'production' === $o['mode'] ? 'https://web.squarecdn.com/v1/square.js' : 'https://sandbox.web.squarecdn.com/v1/square.js', array(), null, true );
-            wp_enqueue_script( 'icpa-card-payment', plugins_url( 'assets/card-payment.js', ICPA_FUNDRAISING_FILE ), array( 'icpa-square-web' ), ICPA_Platform::VERSION, true );
+            wp_enqueue_script( 'icpa-card-payment', plugins_url( 'assets/card-payment.js', ICPA_FUNDRAISING_FILE ), array( 'icpa-square-web', 'icpa-fundraising' ), ICPA_Platform::VERSION, true );
         }
         $return = $campaign ? get_permalink( $campaign ) : ( $o['general_page'] ? get_permalink( $o['general_page'] ) : home_url( '/' ) );
         ob_start();
         ?>
         <?php if ( $campaign || ICPA_Recurring::options()['one_time'] ) { ?>
-        <form action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" method="post" class="icpa-donation-form"<?php if ( $embedded ) { ?> data-card-payment="1" data-app-id="<?php echo esc_attr( $profile['application_id'] ); ?>" data-location-id="<?php echo esc_attr( $profile['location_id'] ); ?>" data-currency="<?php echo esc_attr( $o['currency'] ); ?>" data-endpoint="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>"<?php } ?>>
-            <input type="hidden" name="action" value="icpa_checkout"><input type="hidden" name="environment" value="<?php echo esc_attr( $o['mode'] ); ?>"><input type="hidden" name="campaign_id" value="<?php echo esc_attr( $campaign ); ?>"><input type="hidden" name="checkout_key" value="<?php echo esc_attr( wp_generate_uuid4() ); ?>"><?php wp_nonce_field( 'icpa_checkout' ); ?>
+        <form action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" method="post" class="icpa-donation-form" data-currency="<?php echo esc_attr( $o['currency'] ); ?>" data-fee-bps="<?php echo esc_attr( $o['fee_bps'] ); ?>" data-fee-fixed="<?php echo esc_attr( $o['fee_fixed'] ); ?>"<?php if ( $embedded ) { ?> data-card-payment="1" data-app-id="<?php echo esc_attr( $profile['application_id'] ); ?>" data-location-id="<?php echo esc_attr( $profile['location_id'] ); ?>" data-endpoint="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>"<?php } ?>>
+            <input type="hidden" name="action" value="icpa_checkout"><input type="hidden" name="environment" value="<?php echo esc_attr( $o['mode'] ); ?>"><input type="hidden" name="campaign_id" value="<?php echo esc_attr( $campaign ); ?>"><input type="hidden" name="checkout_key" value="<?php echo esc_attr( wp_generate_uuid4() ); ?>"><?php wp_nonce_field( 'icpa_checkout' ); ?><input type="hidden" name="fee_quote" value="<?php echo esc_attr( ICPA_Fees::quote( $campaign, $allow_fees ) ); ?>">
             <?php if ( $embedded ) { ?>
             <section class="icpa-payment-result" role="status" aria-live="polite" tabindex="-1" hidden>
                 <span class="icpa-result-icon" aria-hidden="true"></span><h3 class="icpa-result-title"></h3>
-                <p class="icpa-result-message"></p><p class="icpa-result-amount"></p><p class="icpa-result-reference"></p>
+                <p class="icpa-result-message"></p><p class="icpa-result-amount"></p><p class="icpa-result-breakdown"></p><p class="icpa-result-reference"></p>
             </section><div class="icpa-payment-entry">
             <?php } ?>
+            <p class="icpa-required-note"><span class="icpa-required" aria-hidden="true">*</span> Required fields</p>
             <div class="icpa-form-step"><span aria-hidden="true">01</span> Choose your donation</div>
-            <label for="<?php echo esc_attr( $id ); ?>">Your donation (<?php echo esc_html( $o['currency'] ); ?>) <span class="icpa-field-check" data-validation-for="amount" aria-live="polite"></span></label>
+            <label for="<?php echo esc_attr( $id ); ?>">Your donation (<?php echo esc_html( $o['currency'] ); ?>) <?php echo self::required_mark(); ?> <span class="icpa-field-check" data-validation-for="amount" aria-live="polite"></span></label>
             <div class="icpa-amounts" aria-label="Suggested donation amounts"><?php foreach ( $o['suggested_amounts'] as $amount ) { if ( $amount < $o['minimum_amount'] || $amount > $o['maximum_amount'] ) { continue; } ?><button type="button" data-amount="<?php echo esc_attr( number_format( $amount / 100, $amount % 100 ? 2 : 0, '.', '' ) ); ?>" aria-pressed="false"><?php echo esc_html( number_format_i18n( $amount / 100, $amount % 100 ? 2 : 0 ) ); ?></button><?php } ?></div>
             <input id="<?php echo esc_attr( $id ); ?>" type="number" min="<?php echo esc_attr( number_format( $o['minimum_amount'] / 100, 2, '.', '' ) ); ?>" max="<?php echo esc_attr( number_format( $o['maximum_amount'] / 100, 2, '.', '' ) ); ?>" step="0.01" name="amount" required placeholder="Or enter your own amount" inputmode="decimal">
             <?php if ( $embedded ) { ?>
             <div class="icpa-form-step"><span aria-hidden="true">02</span> Your details</div><div class="icpa-name-grid"><div>
-            <label for="<?php echo esc_attr( $id ); ?>-first">First name <span class="icpa-field-check" data-validation-for="first_name" aria-live="polite"></span></label><input id="<?php echo esc_attr( $id ); ?>-first" name="first_name" autocomplete="given-name" maxlength="100" required></div><div>
-            <label for="<?php echo esc_attr( $id ); ?>-last">Last name <span class="icpa-field-check" data-validation-for="last_name" aria-live="polite"></span></label><input id="<?php echo esc_attr( $id ); ?>-last" name="last_name" autocomplete="family-name" maxlength="100" required></div></div>
-            <label for="<?php echo esc_attr( $id ); ?>-email">Email <span class="icpa-field-check" data-validation-for="email" aria-live="polite"></span></label><input id="<?php echo esc_attr( $id ); ?>-email" type="email" name="email" autocomplete="email" maxlength="254" required>
-            <div class="icpa-form-step"><span aria-hidden="true">03</span> Secure payment</div><span class="icpa-card-label">Card details</span><div id="<?php echo esc_attr( $id ); ?>-card" class="icpa-card-container"></div>
+            <label for="<?php echo esc_attr( $id ); ?>-first">First name <?php echo self::required_mark(); ?> <span class="icpa-field-check" data-validation-for="first_name" aria-live="polite"></span></label><input id="<?php echo esc_attr( $id ); ?>-first" name="first_name" autocomplete="given-name" maxlength="100" required></div><div>
+            <label for="<?php echo esc_attr( $id ); ?>-last">Last name <?php echo self::required_mark(); ?> <span class="icpa-field-check" data-validation-for="last_name" aria-live="polite"></span></label><input id="<?php echo esc_attr( $id ); ?>-last" name="last_name" autocomplete="family-name" maxlength="100" required></div></div>
+            <label for="<?php echo esc_attr( $id ); ?>-email">Email <?php echo self::required_mark(); ?> <span class="icpa-field-check" data-validation-for="email" aria-live="polite"></span></label><input id="<?php echo esc_attr( $id ); ?>-email" type="email" name="email" autocomplete="email" maxlength="254" required>
+            <div class="icpa-form-step"><span aria-hidden="true">03</span> Secure payment</div><span class="icpa-card-label">Card details <?php echo self::required_mark(); ?></span><div id="<?php echo esc_attr( $id ); ?>-card" class="icpa-card-container"></div>
             <div class="icpa-card-checks" aria-label="Card field validation">
-                <?php foreach ( array( 'cardNumber' => 'Card number', 'expirationDate' => 'Expiry', 'cvv' => 'CVV', 'postalCode' => 'Postcode' ) as $field => $label ) { ?><span class="icpa-card-field-check" data-card-field="<?php echo esc_attr( $field ); ?>" data-state="empty"><span class="icpa-check-icon" aria-hidden="true">○</span> <?php echo esc_html( $label ); ?><span class="screen-reader-text icpa-check-description">: not completed</span></span><?php } ?>
+                <?php foreach ( array( 'cardNumber' => 'Card number', 'expirationDate' => 'Expiry', 'cvv' => 'CVV', 'postalCode' => 'Postcode' ) as $field => $label ) { ?><span class="icpa-card-field-check" data-card-field="<?php echo esc_attr( $field ); ?>" data-state="empty"><span class="icpa-check-icon" aria-hidden="true">○</span> <?php echo esc_html( $label ); ?> <?php echo self::required_mark(); ?><span class="screen-reader-text icpa-check-description">: not completed</span></span><?php } ?>
             </div>
             <p class="icpa-card-validity icpa-small" role="status" aria-live="polite" hidden></p>
             <p class="icpa-card-status icpa-small" role="status" aria-live="polite">Loading secure card form…</p><noscript>JavaScript is required for secure card payments.</noscript>
             <?php } ?>
+            <?php if ( $allow_fees ) { ?>
+            <fieldset class="icpa-fee-options"><legend>Processing costs</legend>
+                <label><input type="radio" name="cover_fees" value="0" checked> Donate my chosen amount only</label>
+                <label><input type="radio" name="cover_fees" value="1"> Add an estimated contribution towards processing costs</label>
+                <p class="icpa-small">Optional. The estimate uses ICPA’s configured rate; Square’s actual processing fee may differ.</p>
+            </fieldset><?php } ?>
+            <section class="icpa-donation-summary" aria-label="Donation breakdown" aria-live="polite">
+                <div><span>Donation</span><strong data-summary-donation>Choose an amount</strong></div>
+                <div><span>Processing-cost contribution</span><strong data-summary-fee>—</strong></div>
+                <div class="icpa-summary-total"><span>Total you pay</span><strong data-summary-total>Choose an amount</strong></div>
+                <p class="icpa-small">Any contribution is optional and goes to ICPA. Square’s actual fee is deducted from ICPA’s payment; it is not an extra charge added by Square at checkout.</p>
+            </section>
             <button class="icpa-btn" type="submit"<?php if ( $embedded ) { ?> disabled<?php } ?>>Donate</button>
             <p class="icpa-small"><?php echo $embedded ? 'One-time donation. Card details are securely handled by Square.' : 'One-time donation. You’ll complete payment on Square.'; ?> <?php if ( ! is_user_logged_in() && $o['account_page'] ) { ?><a href="<?php echo esc_url( wp_login_url( $return ) ); ?>">Sign in first</a> to save it to your donor account.<?php } ?></p>
         <?php if ( $embedded ) { ?></div><?php } ?>
@@ -91,7 +109,7 @@ final class ICPA_Views {
     }
 
     public static function general_form( $atts = array() ) {
-        $atts = shortcode_atts( array( 'campaign' => 0, 'appearance' => 'card' ), $atts, 'icpa_donation_form' );
+        $atts = shortcode_atts( array( 'campaign' => 0, 'appearance' => 'card', 'fees' => 'optional' ), $atts, 'icpa_donation_form' );
         $campaign = absint( $atts['campaign'] );
         $o = ICPA_Platform::options();
         if ( $campaign ? ! ICPA_Platform::open( $campaign ) : ! $o['general_enabled'] ) { return '<div class="icpa-info">This donation option is currently unavailable.</div>'; }
@@ -99,7 +117,7 @@ final class ICPA_Views {
         echo self::wrapper() . self::mode_notice();
         ?><section class="icpa-general-widget <?php echo 'minimal' === $atts['appearance'] ? 'icpa-widget-minimal' : 'icpa-widget-card'; ?>" aria-label="Make a donation"><span class="icpa-eyebrow">Giving back to the community</span><h2><?php echo esc_html( $campaign ? get_the_title( $campaign ) : $o['donation_title'] ); ?></h2><p><?php echo $campaign || ICPA_Recurring::options()['one_time'] ? 'Choose a suggested amount or enter your own. Every donation goes to ICPA.' : 'Choose a recurring gift below. Every donation goes to ICPA.'; ?></p>
         <?php if ( isset( $_GET['icpa_return'] ) ) { ?><div class="icpa-info" role="status">Welcome back. Payment is confirmed only when Square verifies it. Returning here alone does not confirm a donation.</div><?php } ?>
-        <?php echo ICPA_Square::ready() ? self::donation_form( $campaign ) : '<div class="icpa-info">Donations will open once ICPA connects Square.</div>'; ?>
+        <?php echo ICPA_Square::ready() ? self::donation_form( $campaign, 'off' !== $atts['fees'] ) : '<div class="icpa-info">Donations will open once ICPA connects Square.</div>'; ?>
         <div class="icpa-recipient"><strong><?php echo $campaign ? 'Campaign donation' : 'General donation to ICPA'; ?></strong><p><?php echo $campaign ? 'ICPA receives donations and manages this campaign’s distribution of funds.' : 'This supports ICPA’s work without being assigned to a particular campaign.'; ?></p></div></section></div>
         <?php return ob_get_clean();
     }
@@ -245,12 +263,12 @@ final class ICPA_Views {
         <header class="icpa-form-heading"><span class="icpa-eyebrow">A story worth sharing</span><h1>Start something good.</h1><p>Tell us about your cause. ICPA will review your campaign before it goes live.</p></header>
         <form class="icpa-campaign-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
             <input type="hidden" name="action" value="icpa_submit_campaign"><?php wp_nonce_field( 'icpa_submit_campaign' ); ?>
-            <label for="icpa-title">Campaign title</label><input id="icpa-title" name="title" type="text" minlength="5" maxlength="160" placeholder="Give your cause a clear, meaningful title" required>
-            <div class="icpa-form-row"><div><label for="icpa-goal">Fundraising goal (<?php echo esc_html( ICPA_Platform::options()['currency'] ); ?>)</label><input id="icpa-goal" name="goal" type="number" min="1" max="1000000" step="0.01" required placeholder="5000"></div><div><label for="icpa-cause">Cause</label><select id="icpa-cause" name="cause" required><option value="">Choose a cause</option><?php if ( ! is_wp_error( $terms ) ) { foreach ( $terms as $term ) { ?><option value="<?php echo esc_attr( $term->term_id ); ?>"><?php echo esc_html( $term->name ); ?></option><?php } } ?></select></div></div>
-            <label for="icpa-story">Your story</label><textarea id="icpa-story" name="story" rows="8" minlength="80" maxlength="16000" placeholder="Who will this help? How will the funds be used? Why does it matter to you?" required></textarea>
+            <label for="icpa-title">Campaign title <?php echo self::required_mark(); ?></label><input id="icpa-title" name="title" type="text" minlength="5" maxlength="160" placeholder="Give your cause a clear, meaningful title" required>
+            <div class="icpa-form-row"><div><label for="icpa-goal">Fundraising goal (<?php echo esc_html( ICPA_Platform::options()['currency'] ); ?>) <?php echo self::required_mark(); ?></label><input id="icpa-goal" name="goal" type="number" min="1" max="1000000" step="0.01" required placeholder="5000"></div><div><label for="icpa-cause">Cause <?php echo self::required_mark(); ?></label><select id="icpa-cause" name="cause" required><option value="">Choose a cause</option><?php if ( ! is_wp_error( $terms ) ) { foreach ( $terms as $term ) { ?><option value="<?php echo esc_attr( $term->term_id ); ?>"><?php echo esc_html( $term->name ); ?></option><?php } } ?></select></div></div>
+            <label for="icpa-story">Your story <?php echo self::required_mark(); ?></label><textarea id="icpa-story" name="story" rows="8" minlength="80" maxlength="16000" placeholder="Who will this help? How will the funds be used? Why does it matter to you?" required></textarea>
             <label for="icpa-deadline">End date (optional)</label><input id="icpa-deadline" name="deadline" type="date" min="<?php echo esc_attr( current_time( 'Y-m-d' ) ); ?>">
             <p class="icpa-small">An ICPA administrator can add a cover image during review. Published campaign changes are managed by ICPA.</p>
-            <label class="icpa-checkbox"><input type="checkbox" name="consent" value="1" required><span>I confirm this story is accurate and understand that ICPA receives donations and manages distribution.</span></label>
+            <label class="icpa-checkbox"><input type="checkbox" name="consent" value="1" required><span>I confirm this story is accurate and understand that ICPA receives donations and manages distribution. <?php echo self::required_mark(); ?></span></label>
             <button class="icpa-btn" type="submit">Submit for review ›</button>
         </form></div>
         <?php

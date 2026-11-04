@@ -50,7 +50,7 @@ final class ICPA_Square {
     }
 
     /** One local row and one Square checkout per submission key, including network retries. */
-    public static function create_checkout( $campaign, $amount_string, $key, $embedded = false ) {
+    public static function create_checkout( $campaign, $amount_string, $key, $embedded = false, $cover_fees = '0', $fee_quote = '' ) {
         global $wpdb;
         $campaign = ICPA_Security::id( $campaign );
         if ( null === $campaign ) { return new WP_Error( 'invalid_campaign', 'Invalid campaign identifier.' ); }
@@ -60,6 +60,9 @@ final class ICPA_Square {
         if ( ( 0 === (int) $campaign ? ! ICPA_Platform::options()['general_enabled'] : ! ICPA_Platform::open( $campaign ) ) || ! $amount || $amount < ICPA_Platform::options()['minimum_amount'] || $amount > ICPA_Platform::options()['maximum_amount'] || ! is_string( $key ) || ! preg_match( '/\A[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\z/i', $key ) ) {
             return new WP_Error( 'invalid_checkout', 'Choose an available donation option and an amount within the configured donation limits.' );
         }
+        $breakdown = ICPA_Fees::calculate( $amount, $campaign, $cover_fees, $fee_quote );
+        if ( is_wp_error( $breakdown ) ) { return $breakdown; }
+        $amount = $breakdown['total'];
         $key = strtolower( $key );
         $table = ICPA_Platform::table();
         $o = ICPA_Platform::options();
@@ -67,21 +70,21 @@ final class ICPA_Square {
         $user = get_current_user_id();
         $row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE checkout_key=%s", $key ), ARRAY_A );
         if ( ! $row ) {
-            $inserted = $wpdb->insert( $table, array( 'campaign_id' => $campaign, 'user_id' => $user, 'amount' => $amount, 'currency' => $o['currency'], 'mode' => $o['mode'], 'location_id' => $o['location_id'], 'checkout_key' => $key, 'status' => 'pending', 'created_at' => current_time( 'mysql', true ) ) );
+            $inserted = $wpdb->insert( $table, array( 'campaign_id' => $campaign, 'user_id' => $user, 'amount' => $amount, 'donation_amount' => $breakdown['donation'], 'fee_contribution' => $breakdown['fee'], 'currency' => $o['currency'], 'mode' => $o['mode'], 'location_id' => $o['location_id'], 'checkout_key' => $key, 'status' => 'pending', 'created_at' => current_time( 'mysql', true ) ) );
             if ( ! $inserted ) {
                 $row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE checkout_key=%s", $key ), ARRAY_A );
             } else {
                 $row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE id=%d", $wpdb->insert_id ), ARRAY_A );
             }
         }
-        if ( ! $row || (int) $row['user_id'] !== $user || (int) $row['campaign_id'] !== (int) $campaign || (int) $row['amount'] !== $amount || $row['mode'] !== $o['mode'] || $row['currency'] !== $o['currency'] ) {
+        if ( ! $row || (int) $row['user_id'] !== $user || (int) $row['campaign_id'] !== (int) $campaign || (int) $row['amount'] !== $amount || (int) $row['fee_contribution'] !== $breakdown['fee'] || $row['mode'] !== $o['mode'] || $row['currency'] !== $o['currency'] ) {
             return new WP_Error( 'checkout_conflict', 'This submission has changed. Reload the campaign and try again.' );
         }
         if ( ! empty( $row['location_id'] ) && $row['location_id'] !== $o['location_id'] ) { return new WP_Error( 'location_changed', 'The donation location changed. Reload before starting a new attempt, or contact ICPA if payment may already have been taken.' ); }
         if ( $embedded ) {
             if ( ! empty( $row['checkout_url'] ) ) { return new WP_Error( 'checkout_conflict', 'This attempt uses hosted checkout. Reload before paying by card.' ); }
             if ( empty( $row['order_id'] ) ) {
-                $order = self::api( 'POST', '/v2/orders', array( 'idempotency_key' => $key, 'order' => array( 'location_id' => $o['location_id'], 'reference_id' => 'icpa-' . $row['id'], 'line_items' => array( array( 'name' => wp_html_excerpt( 'Donation: ' . ICPA_Platform::donation_label( $campaign ), 200, '' ), 'quantity' => '1', 'base_price_money' => array( 'amount' => $amount, 'currency' => $o['currency'] ) ) ) ) ) );
+                $order = self::api( 'POST', '/v2/orders', array( 'idempotency_key' => $key, 'order' => array( 'location_id' => $o['location_id'], 'reference_id' => 'icpa-' . $row['id'], 'line_items' => ICPA_Fees::line_items( $campaign, $breakdown ) ) ) );
                 if ( is_wp_error( $order ) ) { return $order; }
                 $order_id = isset( $order['order']['id'] ) ? $order['order']['id'] : null;
                 if ( ! is_string( $order_id ) || '' === $order_id || strlen( $order_id ) > 192 || ! isset( $order['order']['location_id'] ) || $o['location_id'] !== $order['order']['location_id'] ) { return new WP_Error( 'invalid_order', 'Square did not return the expected donation order.' ); }
@@ -95,7 +98,7 @@ final class ICPA_Square {
         $response = self::api( 'POST', '/v2/online-checkout/payment-links', array(
             'idempotency_key' => $key,
             'payment_note' => 'ICPA donation ' . $key,
-            'order' => array( 'location_id' => $o['location_id'], 'reference_id' => 'icpa-' . $row['id'], 'line_items' => array( array( 'name' => wp_html_excerpt( 'Donation: ' . ICPA_Platform::donation_label( $campaign ), 200, '' ), 'quantity' => '1', 'base_price_money' => array( 'amount' => $amount, 'currency' => $o['currency'] ) ) ) ),
+            'order' => array( 'location_id' => $o['location_id'], 'reference_id' => 'icpa-' . $row['id'], 'line_items' => ICPA_Fees::line_items( $campaign, $breakdown ) ),
             'checkout_options' => array( 'allow_tipping' => false, 'redirect_url' => add_query_arg( 'icpa_return', '1', $campaign ? get_permalink( $campaign ) : ( $o['general_page'] ? get_permalink( $o['general_page'] ) : home_url( '/' ) ) ) ),
         ) );
         if ( is_wp_error( $response ) ) { return $response; }
@@ -117,6 +120,8 @@ final class ICPA_Square {
             'message' => $completed ? ( $sandbox ? 'Your test payment was confirmed by Square. No real money was charged.' : 'Your donation has been received and confirmed by Square.' ) : 'Your payment has not yet been confirmed. Please do not submit another donation. Contact ICPA if you need help checking its status.',
             'amount' => ICPA_Platform::money( (int) $row['amount'], $row['currency'] ),
             'reference' => 'ICPA-' . $row['id'],
+            'donation' => ICPA_Platform::money( isset( $row['donation_amount'] ) ? (int) $row['donation_amount'] : (int) $row['amount'], $row['currency'] ),
+            'contribution' => ICPA_Platform::money( isset( $row['fee_contribution'] ) ? (int) $row['fee_contribution'] : 0, $row['currency'] ),
         );
     }
 
@@ -132,7 +137,7 @@ final class ICPA_Square {
         $source = isset( $_POST['source_id'] ) ? wp_unslash( $_POST['source_id'] ) : '';
         $email = isset( $_POST['email'] ) ? wp_unslash( $_POST['email'] ) : '';
         if ( ! is_string( $source ) || ! preg_match( '/\A[\x21-\x7e]{10,1024}\z/', $source ) || ! is_string( $email ) || strlen( $email ) > 254 || ! is_email( $email ) ) { wp_send_json_error( array( 'message' => 'Enter a valid email and valid card details.' ), 400 ); }
-        $row = self::create_checkout( isset( $_POST['campaign_id'] ) ? wp_unslash( $_POST['campaign_id'] ) : 0, isset( $_POST['amount'] ) ? wp_unslash( $_POST['amount'] ) : '', isset( $_POST['checkout_key'] ) ? wp_unslash( $_POST['checkout_key'] ) : '', true );
+        $row = self::create_checkout( isset( $_POST['campaign_id'] ) ? wp_unslash( $_POST['campaign_id'] ) : 0, isset( $_POST['amount'] ) ? wp_unslash( $_POST['amount'] ) : '', isset( $_POST['checkout_key'] ) ? wp_unslash( $_POST['checkout_key'] ) : '', true, isset( $_POST['cover_fees'] ) ? wp_unslash( $_POST['cover_fees'] ) : '0', isset( $_POST['fee_quote'] ) ? wp_unslash( $_POST['fee_quote'] ) : '' );
         if ( is_wp_error( $row ) ) { wp_send_json_error( array( 'message' => $row->get_error_message() ), 400 ); }
         if ( 'completed' === $row['status'] ) { wp_send_json_success( self::payment_confirmation( $row, 'completed' ) ); }
         $result = self::api( 'POST', '/v2/payments', array( 'source_id' => $source, 'idempotency_key' => $row['checkout_key'], 'order_id' => $row['order_id'], 'location_id' => $profile['location_id'], 'amount_money' => array( 'amount' => (int) $row['amount'], 'currency' => $row['currency'] ), 'autocomplete' => true, 'buyer_email_address' => $email, 'note' => 'ICPA donation ' . $row['checkout_key'] ) );
@@ -155,7 +160,7 @@ final class ICPA_Square {
         $amount = isset( $_POST['amount'] ) ? wp_unslash( $_POST['amount'] ) : '';
         $key = isset( $_POST['checkout_key'] ) ? wp_unslash( $_POST['checkout_key'] ) : '';
         $giving_option = isset( $_POST['giving_option'] ) ? wp_unslash( $_POST['giving_option'] ) : 'once';
-        if ( 'once' === $giving_option ) { $url = self::create_checkout( $campaign, $amount, $key ); }
+        if ( 'once' === $giving_option ) { $url = self::create_checkout( $campaign, $amount, $key, false, isset( $_POST['cover_fees'] ) ? wp_unslash( $_POST['cover_fees'] ) : '0', isset( $_POST['fee_quote'] ) ? wp_unslash( $_POST['fee_quote'] ) : '' ); }
         else { $url = $campaign ? new WP_Error( 'recurring_scope', 'Recurring checkout is available for general giving only.' ) : ICPA_Recurring::checkout( $giving_option, isset( $_POST['recurring_quote'] ) ? wp_unslash( $_POST['recurring_quote'] ) : '' ); }
         if ( is_wp_error( $url ) ) { wp_die( esc_html( $url->get_error_message() ), 'Checkout unavailable', array( 'response' => 400, 'back_link' => true ) ); }
         // Destination has been restricted to Square-controlled checkout hosts above.
@@ -227,6 +232,18 @@ final class ICPA_Square {
         return is_wp_error( $saved ) ? $saved : new WP_REST_Response( array( 'received' => true ), 200 );
     }
 
+    public static function processing_fee( $payment, $currency ) {
+        if ( ! array_key_exists( 'processing_fee', $payment ) ) { return null; }
+        if ( ! is_array( $payment['processing_fee'] ) || count( $payment['processing_fee'] ) > 100 ) { return new WP_Error( 'fee_invalid', 'Invalid Square processing fee data.' ); }
+        $total = 0;
+        foreach ( $payment['processing_fee'] as $fee ) {
+            $money = is_array( $fee ) && isset( $fee['amount_money'] ) && is_array( $fee['amount_money'] ) ? $fee['amount_money'] : array();
+            if ( ! isset( $money['amount'], $money['currency'] ) || ! is_int( $money['amount'] ) || $currency !== $money['currency'] || abs( $money['amount'] ) > 100000000 ) { return new WP_Error( 'fee_invalid', 'Invalid Square processing fee amount or currency.' ); }
+            $total += $money['amount'];
+        }
+        return $total;
+    }
+
     /** SQL timestamp guard makes duplicate and out-of-order notifications safe. */
     public static function apply_payment( $payment, $mode = null ) {
         global $wpdb;
@@ -260,7 +277,7 @@ final class ICPA_Square {
         if ( ! is_int( $refunded ) || $refunded < 0 || $refunded > (int) $row['amount'] || ( isset( $payment['refunded_money']['currency'] ) && $payment['refunded_money']['currency'] !== $row['currency'] ) ) { return new WP_Error( 'refund_mismatch', 'Invalid refund amount.', array( 'status' => 409 ) ); }
         if ( $source ) {
             if ( 'COMPLETED' !== $payment['status'] ) { return true; }
-            $wpdb->insert( $table, array( 'campaign_id' => $source['campaign_id'], 'user_id' => $source['user_id'], 'amount' => $source['amount'], 'currency' => $source['currency'], 'mode' => $source['mode'], 'location_id' => $o['location_id'], 'checkout_key' => wp_generate_uuid4(), 'order_id' => $payment['order_id'], 'status' => 'pending', 'created_at' => current_time( 'mysql', true ) ) );
+            $wpdb->insert( $table, array( 'campaign_id' => $source['campaign_id'], 'user_id' => $source['user_id'], 'amount' => $source['amount'], 'donation_amount' => $source['donation_amount'], 'fee_contribution' => $source['fee_contribution'], 'currency' => $source['currency'], 'mode' => $source['mode'], 'location_id' => $o['location_id'], 'checkout_key' => wp_generate_uuid4(), 'order_id' => $payment['order_id'], 'status' => 'pending', 'created_at' => current_time( 'mysql', true ) ) );
             $row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE order_id=%s AND mode=%s", $payment['order_id'], ICPA_Square_Settings::mode( $mode ) ), ARRAY_A );
             if ( ! $row ) { return new WP_Error( 'payment_storage', 'Payment could not be saved. Retry later.', array( 'status' => 503 ) ); }
         }
@@ -269,6 +286,11 @@ final class ICPA_Square {
         // Once completed, only that payment's completed/refund state may update the row.
         $saved = $wpdb->query( $wpdb->prepare( "UPDATE $table SET payment_id=%s,status=%s,refunded=%d,updated_at=%s WHERE id=%d AND (updated_at<=%s OR (payment_id<>%s AND status<>'completed' AND %s='completed')) AND (payment_id IS NULL OR payment_id=%s OR status<>'completed') AND (status<>'completed' OR %s='completed')", $payment['id'], $status, $refunded, $timestamp, $row['id'], $timestamp, $payment['id'], $status, $payment['id'], $status ) );
         if ( false === $saved ) { return new WP_Error( 'payment_storage', 'Payment could not be saved. Retry later.', array( 'status' => 503 ) ); }
+        $fee = self::processing_fee( $payment, $row['currency'] );
+        if ( null !== $fee && ! is_wp_error( $fee ) ) {
+            $fee_saved = $wpdb->query( $wpdb->prepare( "UPDATE $table SET processing_fee=%d WHERE id=%d AND payment_id=%s AND updated_at=%s", $fee, $row['id'], $payment['id'], $timestamp ) );
+            if ( false === $fee_saved ) { return new WP_Error( 'fee_storage', 'Square fee reporting could not be saved. Retry later.', array( 'status' => 503 ) ); }
+        }
         if ( $source ) {
             // Hide the unpaid template checkout from the donor's history once
             // its actual paid order has been recorded. Keep it for reconciliation.
