@@ -9,8 +9,8 @@ $old_site = get_option( ICPA_Platform::OPTION ); $old_profiles = get_option( ICP
 delete_option( ICPA_Recurring::OPTION ); delete_option( ICPA_Recurring::PLANS );
 update_option( ICPA_Platform::OPTION, array( 'mode' => 'sandbox', 'currency' => 'AUD' ) );
 ICPA_Square_Settings::save( array( 'sandbox' => array( 'location_id' => 'created-sandbox-location', 'access_token' => 'created-sandbox-fixture-token', 'signature_key' => 'created-sandbox-fixture-key' ), 'production' => array( 'location_id' => 'created-production-location', 'access_token' => 'created-production-fixture-token', 'signature_key' => 'created-production-fixture-key' ) ) );
-$requests = array(); $objects = array(); $post_count = 0; $link_count = 0; $fail_link = false; $bad_amount = false;
-add_filter( 'pre_http_request', function ( $pre, $args, $url ) use ( &$requests, &$objects, &$post_count, &$link_count, &$fail_link, &$bad_amount ) {
+$requests = array(); $objects = array(); $post_count = 0; $link_count = 0; $fail_link = false; $bad_amount = false; $lose_parent_response = false;
+add_filter( 'pre_http_request', function ( $pre, $args, $url ) use ( &$requests, &$objects, &$post_count, &$link_count, &$fail_link, &$bad_amount, &$lose_parent_response ) {
     $body = isset( $args['body'] ) ? json_decode( $args['body'], true ) : null;
     $requests[] = array( 'url' => $url, 'body' => $body );
     $mode = false !== strpos( $url, 'squareupsandbox' ) ? 'sandbox' : 'production';
@@ -20,6 +20,7 @@ add_filter( 'pre_http_request', function ( $pre, $args, $url ) use ( &$requests,
         $object['id'] = $id; $object['version'] = 1;
         if ( $bad_amount && 'SUBSCRIPTION_PLAN_VARIATION' === $object['type'] ) { ++$object['subscription_plan_variation_data']['phases'][0]['pricing']['price_money']['amount']; }
         $objects[$mode][$id] = $object; $response = array( 'catalog_object' => $object );
+        if ( $lose_parent_response && 'SUBSCRIPTION_PLAN' === $object['type'] ) { $lose_parent_response = false; return new WP_Error( 'lost_response', 'Square saved the plan but the response was lost' ); }
     } elseif ( 'GET' === $args['method'] && false !== strpos( $url, '/v2/catalog/object/' ) ) {
         $id = rawurldecode( basename( $url ) );
         if ( ! isset( $objects[$mode][$id] ) ) throw new RuntimeException( 'Unknown mocked catalog ID' );
@@ -46,6 +47,21 @@ $link = ICPA_Recurring::options()['links']['sandbox']['MONTHLY'];
 creation_check( 2500 === $link['amount'] && 'https://sandbox.square.link/u/created-fixture' === $link['url'], 'Only verified recurring checkout is configured' );
 creation_check( empty( ICPA_Recurring::options()['enabled'] ), 'Creating a plan does not silently enable recurring public giving' );
 creation_check( true === ICPA_Recurring::create_plan( 'sandbox', 'MONTHLY', '25.00' ) && 2 === $post_count && 1 === $link_count, 'Duplicate submission reuses existing plan and checkout' );
+// Multiple donors reuse the same checkout/variation. Donor requests must never create catalog objects.
+ICPA_Recurring::save_settings( array( 'enabled' => 1, 'one_time' => 1, 'cadences' => array( 'MONTHLY' ) ) );
+$before_posts = $post_count; $before_links = $link_count;
+$subscribers = get_users( array( 'role' => 'subscriber', 'number' => 1 ) );
+$identities = array( 0, $admin );
+if ( $subscribers ) { $identities[] = $subscribers[0]->ID; }
+foreach ( $identities as $user_id ) {
+    wp_set_current_user( $user_id );
+    for ( $i = 0; $i < 4; ++$i ) {
+        $available = ICPA_Recurring::available();
+        creation_check( $available['MONTHLY']['id'] === $link['id'] && $available['MONTHLY']['url'] === ICPA_Recurring::checkout( 'MONTHLY', ICPA_Recurring::quote( $available['MONTHLY'] ) ), 'Each donor reuses the shared verified plan and checkout' );
+    }
+}
+creation_check( $post_count === $before_posts && $link_count === $before_links, 'Donor signups issue no catalog mutations or checkout creation' );
+wp_set_current_user( $admin );
 $old_id = $link['id'];
 creation_check( true === ICPA_Recurring::create_plan( 'sandbox', 'MONTHLY', '30.00' ), 'New amount creates a separate recurring option' );
 creation_check( 2500 === $objects['sandbox'][$old_id]['subscription_plan_variation_data']['phases'][0]['pricing']['price_money']['amount'], 'Existing subscribers plan is never repriced' );
@@ -54,6 +70,11 @@ creation_check( is_wp_error( ICPA_Recurring::create_plan( 'sandbox', 'WEEKLY', '
 creation_check( ! isset( ICPA_Recurring::options()['links']['sandbox']['WEEKLY'] ), 'Incomplete option is not offered to donors' );
 $staged_posts = $post_count; $fail_link = false;
 creation_check( true === ICPA_Recurring::create_plan( 'sandbox', 'WEEKLY', '10.00' ) && $staged_posts === $post_count && $prior_posts + 2 === $post_count, 'Retry resumes saved catalog stages without duplicate plans' );
+// Simulate a catalog mutation succeeding remotely while its HTTP response is lost.
+$lose_parent_response = true; $object_count = count( $objects['sandbox'] ); $request_start = count( $requests );
+creation_check( is_wp_error( ICPA_Recurring::create_plan( 'sandbox', 'ANNUAL', '42.00' ) ), 'Lost catalog response does not falsely report successful setup' );
+creation_check( true === ICPA_Recurring::create_plan( 'sandbox', 'ANNUAL', '42.00' ) && count( $objects['sandbox'] ) === $object_count + 2, 'Retry after lost response produces one parent and one variation' );
+creation_check( $requests[$request_start]['body']['idempotency_key'] === $requests[$request_start + 1]['body']['idempotency_key'] && $requests[$request_start]['body']['object'] === $requests[$request_start + 1]['body']['object'], 'Lost-response retry sends identical catalog idempotency key and payload' );
 $bad_amount = true;
 creation_check( is_wp_error( ICPA_Recurring::create_plan( 'sandbox', 'QUARTERLY', '10.00' ) ), 'Wrong provider price is rejected before publication' );
 creation_check( ! isset( ICPA_Recurring::options()['links']['sandbox']['QUARTERLY'] ), 'Wrong-price option remains unavailable' );
