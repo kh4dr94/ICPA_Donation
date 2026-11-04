@@ -23,7 +23,7 @@ const fs = require('fs');
         await page.addScriptTag({content:script});
         await page.addScriptTag({content:fs.readFileSync('icpa-fundraising/assets/platform.js', 'utf8')});
         const cardBox = await page.locator('.icpa-card-container').evaluate(node => ({height:getComputedStyle(node).minHeight,radius:getComputedStyle(node).borderRadius}));
-        if (cardBox.height !== '168px' || cardBox.radius !== '19px') throw Error('Reference card panel proportions are incorrect');
+        if (cardBox.height !== '0px' || cardBox.radius !== '19px') throw Error('Card panel must fit its content without a fixed blank area');
         const emit = async (field, state) => page.evaluate(({field,state}) => window.cardListeners.focusClassRemoved({detail:{field,currentState:state}}), {field,state});
         await emit('cardNumber', {isEmpty:false,isCompletelyValid:true,isPotentiallyValid:true});
         if (!(await page.locator('[data-card-field="cardNumber"]').textContent()).includes('✓')) throw Error('Card number tick missing');
