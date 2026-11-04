@@ -67,7 +67,7 @@ final class ICPA_Square {
         $user = get_current_user_id();
         $row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE checkout_key=%s", $key ), ARRAY_A );
         if ( ! $row ) {
-            $inserted = $wpdb->insert( $table, array( 'campaign_id' => $campaign, 'user_id' => $user, 'amount' => $amount, 'currency' => $o['currency'], 'mode' => $o['mode'], 'checkout_key' => $key, 'status' => 'pending', 'created_at' => current_time( 'mysql', true ) ) );
+            $inserted = $wpdb->insert( $table, array( 'campaign_id' => $campaign, 'user_id' => $user, 'amount' => $amount, 'currency' => $o['currency'], 'mode' => $o['mode'], 'location_id' => $o['location_id'], 'checkout_key' => $key, 'status' => 'pending', 'created_at' => current_time( 'mysql', true ) ) );
             if ( ! $inserted ) {
                 $row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE checkout_key=%s", $key ), ARRAY_A );
             } else {
@@ -77,6 +77,7 @@ final class ICPA_Square {
         if ( ! $row || (int) $row['user_id'] !== $user || (int) $row['campaign_id'] !== (int) $campaign || (int) $row['amount'] !== $amount || $row['mode'] !== $o['mode'] || $row['currency'] !== $o['currency'] ) {
             return new WP_Error( 'checkout_conflict', 'This submission has changed. Reload the campaign and try again.' );
         }
+        if ( ! empty( $row['location_id'] ) && $row['location_id'] !== $o['location_id'] ) { return new WP_Error( 'location_changed', 'The donation location changed. Reload before starting a new attempt, or contact ICPA if payment may already have been taken.' ); }
         if ( $embedded ) {
             if ( ! empty( $row['checkout_url'] ) ) { return new WP_Error( 'checkout_conflict', 'This attempt uses hosted checkout. Reload before paying by card.' ); }
             if ( empty( $row['order_id'] ) ) {
@@ -243,6 +244,7 @@ final class ICPA_Square {
         $o = ICPA_Platform::options();
         $o['mode'] = ICPA_Square_Settings::mode( $mode );
         $o['location_id'] = ICPA_Square_Settings::profile( $o['mode'] )['location_id'];
+        if ( ! empty( $row['location_id'] ) ) { $o['location_id'] = $row['location_id']; }
         $money = isset( $payment['amount_money'] ) && is_array( $payment['amount_money'] ) ? $payment['amount_money'] : array();
         if ( empty( $payment['id'] ) || ! is_string( $payment['id'] ) || strlen( $payment['id'] ) > 192 || empty( $payment['location_id'] ) || $payment['location_id'] !== $o['location_id'] || $row['mode'] !== $o['mode'] || ! isset( $money['amount'], $money['currency'] ) || ! is_int( $money['amount'] ) || (int) $row['amount'] !== $money['amount'] || $row['currency'] !== $money['currency'] ) {
             return new WP_Error( 'payment_mismatch', 'Payment does not match the expected donation.', array( 'status' => 409 ) );
@@ -258,7 +260,7 @@ final class ICPA_Square {
         if ( ! is_int( $refunded ) || $refunded < 0 || $refunded > (int) $row['amount'] || ( isset( $payment['refunded_money']['currency'] ) && $payment['refunded_money']['currency'] !== $row['currency'] ) ) { return new WP_Error( 'refund_mismatch', 'Invalid refund amount.', array( 'status' => 409 ) ); }
         if ( $source ) {
             if ( 'COMPLETED' !== $payment['status'] ) { return true; }
-            $wpdb->insert( $table, array( 'campaign_id' => $source['campaign_id'], 'user_id' => $source['user_id'], 'amount' => $source['amount'], 'currency' => $source['currency'], 'mode' => $source['mode'], 'checkout_key' => wp_generate_uuid4(), 'order_id' => $payment['order_id'], 'status' => 'pending', 'created_at' => current_time( 'mysql', true ) ) );
+            $wpdb->insert( $table, array( 'campaign_id' => $source['campaign_id'], 'user_id' => $source['user_id'], 'amount' => $source['amount'], 'currency' => $source['currency'], 'mode' => $source['mode'], 'location_id' => $o['location_id'], 'checkout_key' => wp_generate_uuid4(), 'order_id' => $payment['order_id'], 'status' => 'pending', 'created_at' => current_time( 'mysql', true ) ) );
             $row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE order_id=%s AND mode=%s", $payment['order_id'], ICPA_Square_Settings::mode( $mode ) ), ARRAY_A );
             if ( ! $row ) { return new WP_Error( 'payment_storage', 'Payment could not be saved. Retry later.', array( 'status' => 503 ) ); }
         }

@@ -12,7 +12,7 @@ const fs = require('fs');
                 requests.push(new URLSearchParams(route.request().postData()));
                 return route.fulfill({status: fail ? 502 : 200, contentType:'application/json', body: JSON.stringify(fail ? {success:false,data:{message:'Retry this attempt <script>unsafe</script>'}} : {success:true,data:{status:'completed',title:'Test donation completed',message:'Your test payment was confirmed. No real money was charged.',amount:'AUD $25.50',reference:'ICPA-42'}})});
             }
-            return route.fulfill({contentType:'text/html', body:'<meta charset="utf-8"><style>' + fs.readFileSync('icpa-fundraising/assets/platform.css','utf8') + '</style><style>button:hover{color:white!important}</style><div class="icpa-platform">' + html + '</div>'});
+            return route.fulfill({contentType:'text/html', body:'<meta charset="utf-8"><style>' + fs.readFileSync('icpa-fundraising/assets/platform.css','utf8') + '</style><style>button:hover{color:white!important}</style><div class="icpa-platform"><section class="icpa-general-widget"><span class="icpa-eyebrow">Giving back to the community</span><h2>Donate &amp; Support</h2><p>Choose your gift. Every donation supports ICPA and our community.</p>' + html + '</section></div>'});
         });
         await page.goto('https://donation.example.test');
         await page.evaluate(() => {
@@ -48,6 +48,13 @@ const fs = require('fs');
         await page.locator('[name=email]').fill('invalid-email');
         if ((await page.locator('[data-validation-for="email"]').textContent()) !== '') throw Error('Invalid email retains tick');
         await page.locator('[name=email]').fill('test@example.invalid');
+        await page.screenshot({path:'preview/donation-form-desktop.png',fullPage:true});
+        await page.setViewportSize({width:390,height:844});
+        if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw Error('Embedded form overflows on mobile');
+        const mobileNames = await page.locator('.icpa-name-grid').evaluate(node => getComputedStyle(node).gridTemplateColumns);
+        if (mobileNames.split(' ').length !== 1) throw Error('Mobile name fields should stack');
+        await page.screenshot({path:'preview/donation-form-mobile.png',fullPage:true});
+        await page.setViewportSize({width:1280,height:900});
         await page.getByRole('button',{name:'Donate',exact:true}).click();
         await page.waitForFunction(() => document.querySelector('.icpa-card-status').textContent.includes('Retry this attempt'));
         if (await page.locator('.icpa-card-status script').count()) throw Error('Unsafe error rendering');

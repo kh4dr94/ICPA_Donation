@@ -66,14 +66,16 @@ final class ICPA_Views {
                 <p class="icpa-result-message"></p><p class="icpa-result-amount"></p><p class="icpa-result-reference"></p>
             </section><div class="icpa-payment-entry">
             <?php } ?>
+            <div class="icpa-form-step"><span aria-hidden="true">01</span> Choose your donation</div>
             <label for="<?php echo esc_attr( $id ); ?>">Your donation (<?php echo esc_html( $o['currency'] ); ?>) <span class="icpa-field-check" data-validation-for="amount" aria-live="polite"></span></label>
             <div class="icpa-amounts" aria-label="Suggested donation amounts"><?php foreach ( $o['suggested_amounts'] as $amount ) { if ( $amount < $o['minimum_amount'] || $amount > $o['maximum_amount'] ) { continue; } ?><button type="button" data-amount="<?php echo esc_attr( number_format( $amount / 100, $amount % 100 ? 2 : 0, '.', '' ) ); ?>" aria-pressed="false"><?php echo esc_html( number_format_i18n( $amount / 100, $amount % 100 ? 2 : 0 ) ); ?></button><?php } ?></div>
             <input id="<?php echo esc_attr( $id ); ?>" type="number" min="<?php echo esc_attr( number_format( $o['minimum_amount'] / 100, 2, '.', '' ) ); ?>" max="<?php echo esc_attr( number_format( $o['maximum_amount'] / 100, 2, '.', '' ) ); ?>" step="0.01" name="amount" required placeholder="Or enter your own amount" inputmode="decimal">
             <?php if ( $embedded ) { ?>
-            <label for="<?php echo esc_attr( $id ); ?>-first">First name <span class="icpa-field-check" data-validation-for="first_name" aria-live="polite"></span></label><input id="<?php echo esc_attr( $id ); ?>-first" name="first_name" autocomplete="given-name" maxlength="100" required>
-            <label for="<?php echo esc_attr( $id ); ?>-last">Last name <span class="icpa-field-check" data-validation-for="last_name" aria-live="polite"></span></label><input id="<?php echo esc_attr( $id ); ?>-last" name="last_name" autocomplete="family-name" maxlength="100" required>
+            <div class="icpa-form-step"><span aria-hidden="true">02</span> Your details</div><div class="icpa-name-grid"><div>
+            <label for="<?php echo esc_attr( $id ); ?>-first">First name <span class="icpa-field-check" data-validation-for="first_name" aria-live="polite"></span></label><input id="<?php echo esc_attr( $id ); ?>-first" name="first_name" autocomplete="given-name" maxlength="100" required></div><div>
+            <label for="<?php echo esc_attr( $id ); ?>-last">Last name <span class="icpa-field-check" data-validation-for="last_name" aria-live="polite"></span></label><input id="<?php echo esc_attr( $id ); ?>-last" name="last_name" autocomplete="family-name" maxlength="100" required></div></div>
             <label for="<?php echo esc_attr( $id ); ?>-email">Email <span class="icpa-field-check" data-validation-for="email" aria-live="polite"></span></label><input id="<?php echo esc_attr( $id ); ?>-email" type="email" name="email" autocomplete="email" maxlength="254" required>
-            <span>Card details</span><div id="<?php echo esc_attr( $id ); ?>-card" class="icpa-card-container"></div>
+            <div class="icpa-form-step"><span aria-hidden="true">03</span> Secure payment</div><span class="icpa-card-label">Card details</span><div id="<?php echo esc_attr( $id ); ?>-card" class="icpa-card-container"></div>
             <div class="icpa-card-checks" aria-label="Card field validation">
                 <?php foreach ( array( 'cardNumber' => 'Card number', 'expirationDate' => 'Expiry', 'cvv' => 'CVV', 'postalCode' => 'Postcode' ) as $field => $label ) { ?><span class="icpa-card-field-check" data-card-field="<?php echo esc_attr( $field ); ?>" data-state="empty"><span class="icpa-check-icon" aria-hidden="true">○</span> <?php echo esc_html( $label ); ?><span class="screen-reader-text icpa-check-description">: not completed</span></span><?php } ?>
             </div>
@@ -89,13 +91,13 @@ final class ICPA_Views {
     }
 
     public static function general_form( $atts = array() ) {
-        $atts = shortcode_atts( array( 'campaign' => 0 ), $atts, 'icpa_donation_form' );
+        $atts = shortcode_atts( array( 'campaign' => 0, 'appearance' => 'card' ), $atts, 'icpa_donation_form' );
         $campaign = absint( $atts['campaign'] );
         $o = ICPA_Platform::options();
         if ( $campaign ? ! ICPA_Platform::open( $campaign ) : ! $o['general_enabled'] ) { return '<div class="icpa-info">This donation option is currently unavailable.</div>'; }
         ob_start();
         echo self::wrapper() . self::mode_notice();
-        ?><section class="icpa-general-widget" aria-label="Make a donation"><span class="icpa-eyebrow">Giving back to the community</span><h2><?php echo esc_html( $campaign ? get_the_title( $campaign ) : $o['donation_title'] ); ?></h2><p><?php echo $campaign || ICPA_Recurring::options()['one_time'] ? 'Choose a suggested amount or enter your own. Every donation goes to ICPA.' : 'Choose a recurring gift below. Every donation goes to ICPA.'; ?></p>
+        ?><section class="icpa-general-widget <?php echo 'minimal' === $atts['appearance'] ? 'icpa-widget-minimal' : 'icpa-widget-card'; ?>" aria-label="Make a donation"><span class="icpa-eyebrow">Giving back to the community</span><h2><?php echo esc_html( $campaign ? get_the_title( $campaign ) : $o['donation_title'] ); ?></h2><p><?php echo $campaign || ICPA_Recurring::options()['one_time'] ? 'Choose a suggested amount or enter your own. Every donation goes to ICPA.' : 'Choose a recurring gift below. Every donation goes to ICPA.'; ?></p>
         <?php if ( isset( $_GET['icpa_return'] ) ) { ?><div class="icpa-info" role="status">Welcome back. Payment is confirmed only when Square verifies it. Returning here alone does not confirm a donation.</div><?php } ?>
         <?php echo ICPA_Square::ready() ? self::donation_form( $campaign ) : '<div class="icpa-info">Donations will open once ICPA connects Square.</div>'; ?>
         <div class="icpa-recipient"><strong><?php echo $campaign ? 'Campaign donation' : 'General donation to ICPA'; ?></strong><p><?php echo $campaign ? 'ICPA receives donations and manages this campaign’s distribution of funds.' : 'This supports ICPA’s work without being assigned to a particular campaign.'; ?></p></div></section></div>

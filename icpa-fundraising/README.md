@@ -1,4 +1,4 @@
-# ICPA Fundraising — version 0.7.2
+# ICPA Fundraising — version 0.8.0
 
 An installable WordPress donation plugin with general custom-amount giving and optional fundraising campaigns, organisers and donor accounts. All donations go to **one ICPA Square account**. ICPA approves campaigns and manages distribution; organisers cannot enter a different payment recipient.
 
@@ -14,7 +14,28 @@ Start with Sandbox. Enter a custom amount and test card `4111 1111 1111 1111`, a
 
 During a payment retry, the form locks its amount/email and retains its single-use token and submission key; Square idempotency prevents a repeated request creating another payment. If a network error leaves confirmation uncertain, retry that same attempt or contact ICPA before starting another donation. A declined card requires reloading for a new attempt. The backend rate-limits requests, validates nonces/environment/amount/campaign status, and continues to process signed payment/refund webhooks. No OAuth redirect or Application secret is required.
 
-Version 0.7.2 shows individual green ticks for amount, first name, last name and email, and separate card-number, expiry, CVV and postcode statuses below the Square iframe. Card status comes from Square’s per-field input events; the overall card check requires all four fields to be valid. Invalidated or cleared fields lose their ticks. The selected amount uses contrasting text and a checkmark. A confirmed payment replaces the entry form with a large green confirmation panel, server-confirmed amount and donation reference, and moves keyboard focus to the result. Sandbox says “Test donation completed” and explicitly states that no real money was charged. Pending payments use an amber processing panel and never claim success. This feedback indicates input completeness, not card approval or successful payment. First and last name remain required.
+Version 0.8.0 shows individual green ticks for amount, first name, last name and email, and separate card-number, expiry, CVV and postcode statuses below the Square iframe. Card status comes from Square’s per-field input events; the overall card check requires all four fields to be valid. Invalidated or cleared fields lose their ticks. The selected amount uses contrasting text and a checkmark. A confirmed payment replaces the entry form with a large green confirmation panel, server-confirmed amount and donation reference, and moves keyboard focus to the result. Sandbox says “Test donation completed” and explicitly states that no real money was charged. Pending payments use an amber processing panel and never claim success. This feedback indicates input completeness, not card approval or successful payment. First and last name remain required.
+
+## Design your own page (0.8.0)
+
+Use WordPress blocks or Elementor for your banner, images, columns and text, then insert `[icpa_donation_form]` in a Shortcode block/widget. The plugin keeps your theme's page layout, header and footer. The redesigned default form provides larger controls, numbered giving/details/payment sections, responsive name columns and the existing validation/confirmation states.
+
+For a form that fits directly inside your own section/card without another border, background or shadow, use:
+
+```text
+[icpa_donation_form appearance="minimal"]
+```
+
+Set colours and the donation heading under **ICPA Donations → Settings**. Advanced theme styling can target `.icpa-general-widget`, `.icpa-payment-entry` and `.icpa-form-step`. Square's secure card iframe retains its own layout; the plugin never replaces it with ordinary WordPress card inputs. The plugin does not change your page builder content or other plugins' dashboard notices.
+
+## Select Square locations by name (0.8.0)
+
+1. Under **ICPA Donations → Square connections**, save the matching environment's access token.
+2. Click **Load Sandbox locations** or **Load Production locations** below the profiles. Save profile edits before loading.
+3. Select the named location from that profile's **Square location** dropdown and save profiles.
+4. Run its connection test and test a payment. Refresh the location list after adding/changing Square locations.
+
+All returned locations are listed; inactive locations or locations using a different site currency are disabled. Discovery is administrator-only, nonce-protected and read-only against Square. Location names/IDs are cached independently for each environment and invalidated when the access token changes. The manual legacy field on general Settings has been replaced with a link to these profile selectors. Existing saved locations remain selected even before discovery; advanced server-configured locations remain controlled on the server. Changing the selected location applies to new donation attempts. Each new one-time donation stores its location so later payment/refund reconciliation continues using its original location; previously stored rows without a location are assigned the old profile location before an administrator changes profiles. Credentials must still belong to the same receiving ICPA Square account for historical payments to be accessible. In-progress attempts must be reloaded if the default location changes.
 
 ## Included
 

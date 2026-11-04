@@ -193,3 +193,23 @@
 .icpa-platform .icpa-payment-entry>.icpa-btn{width:100%;margin:14px 0}
 .icpa-platform .icpa-payment-entry>input:not([type="hidden"]){margin:6px 0 14px}
 .icpa-platform .icpa-check-description{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* Embedded donation form: readable within theme and page-builder content columns. */
+.icpa-platform .icpa-general-widget{max-width:760px;padding:clamp(24px,4vw,44px);margin:28px auto;border:1px solid #e6e1eb;border-top:4px solid var(--icpa-green);border-radius:16px;box-shadow:0 12px 44px #281c460b}
+.icpa-platform .icpa-general-widget h2{font-size:clamp(28px,3vw,36px);line-height:1.2;margin:10px 0 16px}
+.icpa-platform .icpa-general-widget>p{font-size:15px;line-height:1.7;max-width:56ch}
+.icpa-platform .icpa-form-step{display:flex;align-items:center;gap:10px;padding-top:22px;margin-top:22px;border-top:1px solid #e9e4ed;font-size:16px;font-weight:700;color:var(--icpa-ink)}
+.icpa-platform .icpa-form-step:first-child{border-top:0;margin-top:0;padding-top:0}
+.icpa-platform .icpa-form-step>span{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fff2c5;color:#281c46;font-size:11px;letter-spacing:.04em}
+.icpa-platform .icpa-donation-form label{font-size:14px;margin:16px 0 8px}
+.icpa-platform .icpa-donation-form input:not([type=hidden]){min-height:50px;font-size:16px!important}
+.icpa-platform .icpa-donation-form .icpa-amounts{gap:10px;margin:12px 0 16px}
+.icpa-platform .icpa-donation-form .icpa-amounts button{min-height:52px;font-size:16px;border-radius:9px}
+.icpa-platform .icpa-name-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.icpa-platform .icpa-name-grid input{margin:6px 0 0}
+.icpa-platform .icpa-card-label{display:block;font-size:14px;margin:18px 0 10px}
+.icpa-platform .icpa-payment-entry>.icpa-btn,.icpa-platform .icpa-donation-form>.icpa-btn{min-height:54px;border-radius:9px;font-size:16px;font-weight:700;margin-top:22px}
+.icpa-platform .icpa-payment-entry>.icpa-small{font-size:12px;line-height:1.7;text-align:center;color:#626075}
+.icpa-platform .icpa-general-widget .icpa-recipient{font-size:13px;line-height:1.7;background:#faf9fc;margin-top:24px;padding:18px;border:0;border-radius:9px}
+.icpa-platform .icpa-general-widget.icpa-widget-minimal{max-width:none;margin:0;padding:0;border:0;box-shadow:none;background:transparent;border-radius:0}
+@media(max-width:520px){.icpa-platform .icpa-name-grid{grid-template-columns:1fr;gap:0}.icpa-platform .icpa-donation-form .icpa-amounts{grid-template-columns:repeat(2,1fr)}.icpa-platform .icpa-general-widget{padding:24px 18px}.icpa-platform .icpa-general-widget.icpa-widget-minimal{padding:0}.icpa-platform .icpa-card-checks{gap:6px}.icpa-platform .icpa-payment-result{padding:24px 16px}}

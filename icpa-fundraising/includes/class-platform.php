@@ -2,11 +2,12 @@
 defined( 'ABSPATH' ) || exit;
 
 final class ICPA_Platform {
-    const VERSION = '0.7.2';
+    const VERSION = '0.8.0';
     const OPTION = 'icpa_fundraising_settings';
     const TYPE = 'icpa_campaign';
 
     public static function init() {
+        add_action( 'init', array( __CLASS__, 'upgrade' ), 5 );
         add_action( 'init', array( __CLASS__, 'register' ) );
         add_action( 'admin_init', array( __CLASS__, 'settings' ) );
         add_action( 'add_meta_boxes', array( __CLASS__, 'meta_boxes' ) );
@@ -23,6 +24,10 @@ final class ICPA_Platform {
         return $wpdb->prefix . 'icpa_donations';
     }
 
+    public static function upgrade() {
+        if ( get_option( 'icpa_fundraising_version' ) !== self::VERSION ) { self::activate(); }
+    }
+
     public static function activate() {
         global $wpdb;
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -36,6 +41,7 @@ final class ICPA_Platform {
             refunded bigint(20) unsigned NOT NULL DEFAULT 0,
             currency varchar(3) NOT NULL,
             mode varchar(12) NOT NULL,
+            location_id varchar(100) NOT NULL DEFAULT '',
             checkout_key varchar(36) NOT NULL,
             checkout_url text DEFAULT NULL,
             order_id varchar(192) DEFAULT NULL,
@@ -138,7 +144,7 @@ final class ICPA_Platform {
             add_settings_error( self::OPTION, 'currency_locked', 'Currency cannot change after the first checkout. Create a separate site for another currency.' );
             $currency = $old['currency'];
         }
-        $clean = array( 'currency' => $currency, 'mode' => isset( $input['mode'] ) && 'production' === $input['mode'] ? 'production' : 'sandbox', 'location_id' => isset( $input['location_id'] ) && is_string( $input['location_id'] ) ? sanitize_text_field( $input['location_id'] ) : '' );
+        $clean = array( 'currency' => $currency, 'mode' => isset( $input['mode'] ) && 'production' === $input['mode'] ? 'production' : 'sandbox', 'location_id' => $old['location_id'] );
         foreach ( array( 'general_enabled', 'campaigns_enabled' ) as $field ) { $clean[$field] = isset( $input[$field] ) ? ( empty( $input[$field] ) ? 0 : 1 ) : $old[$field]; }
         $minimum = isset( $input['min_donation'] ) ? self::cents( $input['min_donation'] ) : $old['minimum_amount'];
         $maximum = isset( $input['max_donation'] ) ? self::cents( $input['max_donation'] ) : $old['maximum_amount'];
@@ -183,6 +189,7 @@ final class ICPA_Platform {
     }
 
     public static function admin_assets() {
+        if ( current_user_can( 'manage_options' ) && isset( $_GET['page'] ) && 'icpa-donations' === $_GET['page'] ) { wp_enqueue_style( 'icpa-ledger', plugins_url( 'assets/admin-ledger.css', ICPA_FUNDRAISING_FILE ), array(), self::VERSION ); }
         if ( ! isset( $_GET['page'] ) || ! in_array( $_GET['page'], array( 'icpa-platform', 'icpa-general-settings' ), true ) || ! current_user_can( 'manage_options' ) ) { return; }
         wp_enqueue_media();
         wp_enqueue_script( 'icpa-branding-admin', plugins_url( 'assets/branding-admin.js', ICPA_FUNDRAISING_FILE ), array( 'media-views' ), self::VERSION, true );
@@ -204,14 +211,16 @@ final class ICPA_Platform {
         $page = isset( $_GET['paged'] ) ? ICPA_Security::page( $_GET['paged'] ) : 1;
         $rows = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $table WHERE mode=%s ORDER BY id DESC LIMIT 25 OFFSET %d", self::options()['mode'], ( $page - 1 ) * 25 ), ARRAY_A );
         $count = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $table WHERE mode=%s", self::options()['mode'] ) );
-        echo '<div class="wrap"><h1>One-time donations — ' . esc_html( self::options()['mode'] ) . '</h1><p>Only completed donations count towards campaign goals. Totals subtract refunds and do not subtract Square processing fees. Pending checkouts may have been abandoned. Manage refunds and receipts in Square.</p>';
+        echo '<div class="wrap icpa-ledger"><h1>One-time donations — ' . esc_html( self::options()['mode'] ) . '</h1><p>Only completed donations count towards campaign goals. Totals subtract refunds and do not subtract Square processing fees. Pending checkouts may have been abandoned. Manage refunds and receipts in Square.</p>';
         if ( ICPA_Recurring::options()['enabled'] ) { echo '<div class="notice notice-info"><p>Recurring subscriptions and renewal payments are managed in Square. They are not included in this one-time donation ledger or campaign totals.</p></div>'; }
         if ( isset( $_GET['icpa_sync'] ) ) { echo '<div class="notice notice-info"><p>' . ( 'ok' === $_GET['icpa_sync'] ? 'Square payment state refreshed.' : 'Unable to refresh this payment. It may not have been paid yet. Confirm the payment and connection in Square, then retry.' ) . '</p></div>'; }
+        $summary = $wpdb->get_row( $wpdb->prepare( "SELECT SUM(CASE WHEN status='completed' THEN amount-refunded ELSE 0 END) AS received, SUM(status='completed') AS completed, SUM(status='pending') AS pending FROM $table WHERE mode=%s", self::options()['mode'] ), ARRAY_A );
+        echo '<div class="icpa-ledger-stats"><div><span>Confirmed donations, less refunds</span><strong>' . esc_html( self::money( (int) $summary['received'] ) ) . '</strong></div><div><span>Completed payments</span><strong>' . esc_html( (int) $summary['completed'] ) . '</strong></div><div><span>Awaiting confirmation</span><strong>' . esc_html( (int) $summary['pending'] ) . '</strong></div></div>';
         echo '<table class="widefat striped"><thead><tr><th>ID / Started (UTC)</th><th>Campaign</th><th>Donor</th><th>Amount / Refunded</th><th>Status</th><th>Square order</th><th>Reconcile</th></tr></thead><tbody>';
         foreach ( $rows as $row ) {
             $user = $row['user_id'] ? get_user_by( 'id', $row['user_id'] ) : false;
             $refresh = '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="icpa_reconcile_donation"><input type="hidden" name="donation_id" value="' . esc_attr( $row['id'] ) . '">' . wp_nonce_field( 'icpa_reconcile_' . $row['id'], '_wpnonce', true, false ) . '<button type="submit" class="button-link">Refresh from Square</button></form>';
-            echo '<tr><td>' . esc_html( $row['id'] ) . '<br>' . esc_html( $row['created_at'] ) . '</td><td>' . esc_html( self::donation_label( (int) $row['campaign_id'] ) ) . '</td><td>' . esc_html( $user ? $user->display_name : 'Guest or deleted account' ) . '</td><td>' . esc_html( self::money( (int) $row['amount'], $row['currency'] ) ) . '<br>' . esc_html( self::money( (int) $row['refunded'], $row['currency'] ) ) . ' refunded</td><td>' . esc_html( $row['status'] ) . '</td><td>' . esc_html( $row['order_id'] ?: 'Checkout not created' ) . '</td><td>' . ( $row['order_id'] ? $refresh : '—' ) . '</td></tr>';
+            echo '<tr><td>' . esc_html( $row['id'] ) . '<br>' . esc_html( $row['created_at'] ) . '</td><td>' . esc_html( self::donation_label( (int) $row['campaign_id'] ) ) . '</td><td>' . esc_html( $user ? $user->display_name : 'Guest or deleted account' ) . '</td><td>' . esc_html( self::money( (int) $row['amount'], $row['currency'] ) ) . '<br>' . esc_html( self::money( (int) $row['refunded'], $row['currency'] ) ) . ' refunded</td><td>' . '<span class="icpa-ledger-status status-' . esc_attr( sanitize_key( $row['status'] ) ) . '">' . esc_html( $row['status'] ) . '</span></td><td>' . esc_html( $row['order_id'] ?: 'Checkout not created' ) . '</td><td>' . ( $row['order_id'] ? $refresh : '—' ) . '</td></tr>';
         }
         if ( ! $rows ) { echo '<tr><td colspan="7">No donations in this environment yet.</td></tr>'; }
         echo '</tbody></table>' . wp_kses_post( paginate_links( array( 'base' => add_query_arg( 'paged', '%#%' ), 'format' => '', 'current' => $page, 'total' => (int) ceil( $count / 25 ) ) ) ) . '</div>';
@@ -247,7 +256,8 @@ final class ICPA_Platform {
         foreach ( array( 'AUD', 'USD', 'CAD', 'GBP', 'EUR', 'NZD' ) as $currency ) {
             echo '<option ' . selected( $o['currency'], $currency, false ) . '>' . esc_html( $currency ) . '</option>';
         }
-        echo '</select></td></tr><tr><th><label for="icpa-mode">Square environment</label></th><td><select id="icpa-mode" name="' . esc_attr( self::OPTION ) . '[mode]"><option value="sandbox" ' . selected( $o['mode'], 'sandbox', false ) . '>Sandbox (test payments)</option><option value="production" ' . selected( $o['mode'], 'production', false ) . '>Production (real payments)</option></select></td></tr><tr><th><label for="icpa-location">ICPA Square location ID</label></th><td><input id="icpa-location" name="' . esc_attr( self::OPTION ) . '[location_id]" value="' . esc_attr( $o['location_id'] ) . '" class="regular-text"></td></tr>';
+        echo '</select></td></tr><tr><th><label for="icpa-mode">Square environment</label></th><td><select id="icpa-mode" name="' . esc_attr( self::OPTION ) . '[mode]"><option value="sandbox" ' . selected( $o['mode'], 'sandbox', false ) . '>Sandbox (test payments)</option><option value="production" ' . selected( $o['mode'], 'production', false ) . '>Production (real payments)</option></select></td></tr>';
+        echo '<tr><th>Square location</th><td><p>Choose the location by name under <a href="' . esc_url( admin_url( 'admin.php?page=icpa-square-settings' ) ) . '">Square connections</a>, separately for Sandbox and Production. The selected environment uses its saved profile location.</p></td></tr>';
         foreach ( array( 'general_page' => 'General donation page [icpa_donation_form]', 'browse_page' => 'Browse page [icpa_campaigns]', 'submit_page' => 'Start page [icpa_start_campaign]', 'account_page' => 'Account page [icpa_account]' ) as $key => $label ) {
             echo '<tr><th><label for="' . esc_attr( $key ) . '">' . esc_html( $label ) . '</label></th><td>';
             wp_dropdown_pages( array( 'name' => self::OPTION . '[' . $key . ']', 'id' => $key, 'selected' => $o[$key], 'show_option_none' => 'Select a page', 'option_none_value' => 0 ) );
@@ -263,7 +273,7 @@ final class ICPA_Platform {
         }
         echo '</table>';
         submit_button();
-        echo '</form><h2>Square connection</h2><p>Status: <strong>' . ( ICPA_Square::ready() ? 'Configured — validate checkout and webhooks before launch' : 'Not configured — checkout is disabled' ) . '</strong></p><p><a class="button" href="' . esc_url( admin_url( 'admin.php?page=icpa-square-settings' ) ) . '">Configure Sandbox and Production profiles</a></p><p>Store access tokens, webhook signature keys and separate location IDs under ICPA Donations → Square connections. The location field above is retained for legacy server-based configuration.</p><p>Enable WordPress membership registration with the Subscriber default role if you want self-service donor accounts or organiser submissions. General donations also work for guests.</p></div>';
+        echo '</form><h2>Square connection</h2><p>Status: <strong>' . ( ICPA_Square::ready() ? 'Configured — validate checkout and webhooks before launch' : 'Not configured — checkout is disabled' ) . '</strong></p><p><a class="button" href="' . esc_url( admin_url( 'admin.php?page=icpa-square-settings' ) ) . '">Configure Sandbox and Production profiles</a></p><p>Store access tokens, webhook signature keys and separate location IDs under ICPA Donations → Square connections. Existing legacy server-based location configuration remains supported.</p><p>Enable WordPress membership registration with the Subscriber default role if you want self-service donor accounts or organiser submissions. General donations also work for guests.</p></div>';
     }
 
     public static function meta_boxes() {

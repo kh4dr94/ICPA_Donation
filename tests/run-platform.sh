@@ -55,6 +55,7 @@ PHP
 dlocal exec "$task_wp" php /test/integration.php
 dlocal exec "$task_wp" php /test/platform-integration.php
 dlocal exec "$task_wp" php /test/donations-integration.php
+dlocal exec "$task_wp" php /test/locations-integration.php
 dlocal exec "$task_wp" php /test/recurring-integration.php
 dlocal exec "$task_wp" php /test/security-integration.php
 dlocal exec "$task_wp" php /test/card-integration.php
