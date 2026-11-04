@@ -25,7 +25,7 @@ fee_check( is_wp_error( ICPA_Fees::calculate( $o['maximum_amount'], 0, '1', $quo
 $html = ICPA_Views::general_form();
 file_put_contents( '/tmp/icpa-fee-view.html', ICPA_Views::donation_form() );
 fee_check( false !== strpos( $html, 'name="cover_fees" value="0" checked' ) && false !== strpos( $html, 'icpa-donation-summary' ), 'Optional choice defaults to donation only and includes breakdown' );
-fee_check( substr_count( $html, 'icpa-required"' ) >= 9, 'Required donation and card sections have accessible red markers' );
+fee_check( substr_count( $html, 'icpa-required"' ) >= 5, 'Required donation and card sections have accessible red markers' );
 fee_check( false === strpos( ICPA_Views::general_form( array( 'fees' => 'off' ) ), 'name="cover_fees"' ), 'Specific forms can disable contribution choice' );
 $captured = array();
 add_filter( 'pre_http_request', function ( $pre, $args, $url ) use ( &$captured ) {

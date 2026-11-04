@@ -240,3 +240,16 @@
 .icpa-platform .icpa-card-powered{font-size:12px;margin-top:14px}
 .icpa-platform .icpa-fee-rate{font-size:12px;color:#626075}
 @media(max-width:520px){.icpa-platform .icpa-card-area{padding:12px}.icpa-platform .icpa-card-area .icpa-card-container{padding:12px 8px;min-height:120px}.icpa-platform .icpa-card-area .icpa-card-checks{gap:10px}.icpa-platform .icpa-summary-fee-label .icpa-fee-rate{display:block}}
+
+/* Reference panel proportions and neutral, unfilled field-status circles. */
+.icpa-platform .icpa-card-area{padding:24px 24px 22px;border-radius:22px;background:#f7f8f9;border-color:#e4e7ec;box-shadow:0 2px 3px #281c4606;font-family:Arial,sans-serif}
+.icpa-platform .icpa-card-area .icpa-card-container{box-sizing:border-box;min-height:168px;padding:12px;border-radius:19px;border-color:#b8c1d1;margin-bottom:18px}
+.icpa-platform .icpa-card-area .icpa-card-checks{gap:14px;margin:0 0 22px}
+.icpa-platform .icpa-card-area .icpa-card-field-check{font-size:14px;color:#98a2b3;gap:4px;line-height:18px}
+.icpa-platform .icpa-card-area .icpa-check-icon{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;flex:0 0 16px;box-sizing:border-box}
+.icpa-platform .icpa-card-area .icpa-card-field-check[data-state="empty"] .icpa-check-icon,.icpa-platform .icpa-card-area .icpa-card-field-check[data-state="incomplete"] .icpa-check-icon{border:2px solid #cfd5de;border-radius:50%;font-size:0}
+.icpa-platform .icpa-card-field-check[hidden]{display:none!important}
+.icpa-platform .icpa-card-area .icpa-card-status:empty{display:none}
+.icpa-platform .icpa-card-area .icpa-card-hint{font-size:14px;color:#717b8c;line-height:20px;margin:22px 0 0;text-align:center}
+.icpa-platform .icpa-card-area .icpa-card-powered{font-size:12px;color:#717b8c;line-height:18px;margin:20px 0 0;text-align:center}
+@media(max-width:520px){.icpa-platform .icpa-card-area{padding:18px 12px;border-radius:20px}.icpa-platform .icpa-card-area .icpa-card-container{padding:12px 8px;min-height:168px}.icpa-platform .icpa-card-area .icpa-card-checks{gap:12px;row-gap:8px}}

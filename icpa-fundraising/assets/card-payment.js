@@ -86,13 +86,14 @@
             if (!window.isSecureContext) { throw new Error('Card payments require a secure HTTPS connection.'); }
             if (!window.Square) { throw new Error('The secure card form could not load. Refresh the page or contact ICPA.'); }
             const payments = window.Square.payments(form.dataset.appId, form.dataset.locationId);
-            card = await payments.card({ style: { input: { fontSize: '16px', color: '#281c46' }, 'input::placeholder': { color: '#7c8491' }, '.input-container': { borderColor: '#d8dce3', borderRadius: '8px' }, '.input-container.is-focus': { borderColor: '#281c46' } } });
+            card = await payments.card({ style: { input: { fontSize: '16px', fontFamily: 'Arial, sans-serif', color: '#333333' }, 'input::placeholder': { color: '#808080' }, '.input-container': { borderColor: '#d8dce3', borderRadius: '6px' }, '.input-container.is-focus': { borderColor: '#281c46' } } });
             const updateCardField = function (event) {
                 if (!validity || busy || finished) { return; }
                 const detail = event.detail;
                 if (!detail || !detail.currentState) { return; }
                 const indicator = Array.from(form.querySelectorAll('[data-card-field]')).find(node => node.dataset.cardField === detail.field);
                 if (!indicator) { return; }
+                indicator.hidden = false;
                 const state = detail.currentState;
                 const invalidField = state.hasErrorClass === true || detail.eventType === 'errorClassAdded' || state.isPotentiallyValid === false;
                 const value = invalidField ? 'invalid' : (state.isEmpty ? 'empty' : (state.isCompletelyValid ? 'complete' : 'incomplete'));
