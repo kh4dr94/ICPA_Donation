@@ -160,3 +160,9 @@
 .icpa-recurring-option>p{font-size:12px;padding:14px 18px 0;color:var(--icpa-mute)}
 .icpa-recurring-form{padding:0 18px 18px}
 .icpa-recurring-form .icpa-btn{width:100%}
+
+/* Square hosts card inputs in its own secure iframe. */
+.icpa-platform .icpa-card-container{min-height:90px;margin:12px 0}
+.icpa-platform .icpa-card-status{margin:12px 0}
+.icpa-platform .icpa-donation-form>input:not([type="hidden"]){width:100%;box-sizing:border-box;margin:6px 0 14px;padding:14px;border:1px solid #ded8e6;border-radius:7px;background:#fff;color:#281c46}
+.icpa-platform .icpa-btn:disabled{opacity:.65;cursor:wait}

@@ -7,6 +7,8 @@ final class ICPA_Square {
     public static function init() {
         add_action( 'admin_post_icpa_checkout', array( __CLASS__, 'checkout' ) );
         add_action( 'admin_post_nopriv_icpa_checkout', array( __CLASS__, 'checkout' ) );
+        add_action( 'wp_ajax_icpa_card_payment', array( __CLASS__, 'card_payment' ) );
+        add_action( 'wp_ajax_nopriv_icpa_card_payment', array( __CLASS__, 'card_payment' ) );
         add_action( 'rest_api_init', array( __CLASS__, 'routes' ) );
     }
 
@@ -48,7 +50,7 @@ final class ICPA_Square {
     }
 
     /** One local row and one Square checkout per submission key, including network retries. */
-    public static function create_checkout( $campaign, $amount_string, $key ) {
+    public static function create_checkout( $campaign, $amount_string, $key, $embedded = false ) {
         global $wpdb;
         $campaign = ICPA_Security::id( $campaign );
         if ( null === $campaign ) { return new WP_Error( 'invalid_campaign', 'Invalid campaign identifier.' ); }
@@ -75,6 +77,19 @@ final class ICPA_Square {
         if ( ! $row || (int) $row['user_id'] !== $user || (int) $row['campaign_id'] !== (int) $campaign || (int) $row['amount'] !== $amount || $row['mode'] !== $o['mode'] || $row['currency'] !== $o['currency'] ) {
             return new WP_Error( 'checkout_conflict', 'This submission has changed. Reload the campaign and try again.' );
         }
+        if ( $embedded ) {
+            if ( ! empty( $row['checkout_url'] ) ) { return new WP_Error( 'checkout_conflict', 'This attempt uses hosted checkout. Reload before paying by card.' ); }
+            if ( empty( $row['order_id'] ) ) {
+                $order = self::api( 'POST', '/v2/orders', array( 'idempotency_key' => $key, 'order' => array( 'location_id' => $o['location_id'], 'reference_id' => 'icpa-' . $row['id'], 'line_items' => array( array( 'name' => wp_html_excerpt( 'Donation: ' . ICPA_Platform::donation_label( $campaign ), 200, '' ), 'quantity' => '1', 'base_price_money' => array( 'amount' => $amount, 'currency' => $o['currency'] ) ) ) ) ) );
+                if ( is_wp_error( $order ) ) { return $order; }
+                $order_id = isset( $order['order']['id'] ) ? $order['order']['id'] : null;
+                if ( ! is_string( $order_id ) || '' === $order_id || strlen( $order_id ) > 192 || ! isset( $order['order']['location_id'] ) || $o['location_id'] !== $order['order']['location_id'] ) { return new WP_Error( 'invalid_order', 'Square did not return the expected donation order.' ); }
+                if ( false === $wpdb->update( $table, array( 'order_id' => $order_id ), array( 'id' => $row['id'] ) ) ) { return new WP_Error( 'order_storage', 'The donation could not be saved. Retry this attempt.' ); }
+                $row['order_id'] = $order_id;
+            }
+            return $row;
+        }
+        if ( ! empty( $row['order_id'] ) && empty( $row['checkout_url'] ) ) { return new WP_Error( 'checkout_conflict', 'This attempt uses embedded card payment. Reload before starting another checkout.' ); }
         if ( ! empty( $row['checkout_url'] ) && self::valid_checkout_url( $row['checkout_url'] ) ) { return $row['checkout_url']; }
         $response = self::api( 'POST', '/v2/online-checkout/payment-links', array(
             'idempotency_key' => $key,
@@ -90,6 +105,31 @@ final class ICPA_Square {
         $saved = $wpdb->update( $table, array( 'order_id' => $link['order_id'], 'checkout_url' => $link['url'] ), array( 'id' => $row['id'] ) );
         if ( false === $saved ) { return new WP_Error( 'checkout_storage', 'Checkout could not be saved. Please retry your submission.' ); }
         return $link['url'];
+    }
+
+    /** Card numbers stay inside Square's iframe. Only a single-use payment token reaches this handler. */
+    public static function card_payment() {
+        ICPA_Security::require_post( 16384 );
+        check_ajax_referer( 'icpa_checkout', '_wpnonce' );
+        if ( ! is_ssl() ) { wp_send_json_error( array( 'message' => 'Secure HTTPS is required for card donations.' ), 400 ); }
+        if ( ! ICPA_Security::rate_limit( 'checkout' ) ) { wp_send_json_error( array( 'message' => 'Please wait a minute before trying again.' ), 429 ); }
+        $o = ICPA_Platform::options();
+        $profile = ICPA_Square_Settings::profile();
+        if ( empty( $profile['application_id'] ) || ! isset( $_POST['environment'] ) || ! is_string( $_POST['environment'] ) || $_POST['environment'] !== $o['mode'] ) { wp_send_json_error( array( 'message' => 'Payment settings changed. Reload the donation page.' ), 400 ); }
+        $source = isset( $_POST['source_id'] ) ? wp_unslash( $_POST['source_id'] ) : '';
+        $email = isset( $_POST['email'] ) ? wp_unslash( $_POST['email'] ) : '';
+        if ( ! is_string( $source ) || ! preg_match( '/\A[\x21-\x7e]{10,1024}\z/', $source ) || ! is_string( $email ) || strlen( $email ) > 254 || ! is_email( $email ) ) { wp_send_json_error( array( 'message' => 'Enter a valid email and valid card details.' ), 400 ); }
+        $row = self::create_checkout( isset( $_POST['campaign_id'] ) ? wp_unslash( $_POST['campaign_id'] ) : 0, isset( $_POST['amount'] ) ? wp_unslash( $_POST['amount'] ) : '', isset( $_POST['checkout_key'] ) ? wp_unslash( $_POST['checkout_key'] ) : '', true );
+        if ( is_wp_error( $row ) ) { wp_send_json_error( array( 'message' => $row->get_error_message() ), 400 ); }
+        if ( 'completed' === $row['status'] ) { wp_send_json_success( array( 'status' => 'completed', 'message' => 'Thank you. Your donation has been received.' ) ); }
+        $result = self::api( 'POST', '/v2/payments', array( 'source_id' => $source, 'idempotency_key' => $row['checkout_key'], 'order_id' => $row['order_id'], 'location_id' => $profile['location_id'], 'amount_money' => array( 'amount' => (int) $row['amount'], 'currency' => $row['currency'] ), 'autocomplete' => true, 'buyer_email_address' => $email, 'note' => 'ICPA donation ' . $row['checkout_key'] ) );
+        if ( is_wp_error( $result ) ) { wp_send_json_error( array( 'message' => 'Payment was not confirmed. Retry this same attempt to check it safely. If your card was declined, reload the page before using another card.' ), 502 ); }
+        $payment = isset( $result['payment'] ) && is_array( $result['payment'] ) ? $result['payment'] : array();
+        if ( ! isset( $payment['order_id'] ) || $payment['order_id'] !== $row['order_id'] ) { wp_send_json_error( array( 'message' => 'Payment confirmation is unavailable. Contact ICPA before trying a new donation.' ), 502 ); }
+        $saved = self::apply_payment( $payment, $row['mode'] );
+        if ( is_wp_error( $saved ) ) { wp_send_json_error( array( 'message' => 'Your payment is awaiting confirmation. Contact ICPA before trying a new donation.' ), 503 ); }
+        if ( in_array( $payment['status'], array( 'FAILED', 'CANCELED' ), true ) ) { wp_send_json_error( array( 'message' => 'This payment was declined or canceled. Reload the page before trying another card.' ), 400 ); }
+        wp_send_json_success( array( 'status' => 'COMPLETED' === $payment['status'] ? 'completed' : 'pending', 'message' => 'COMPLETED' === $payment['status'] ? 'Thank you. Your donation has been received.' : 'Your payment is processing. Please do not submit another donation.' ) );
     }
 
     public static function checkout() {

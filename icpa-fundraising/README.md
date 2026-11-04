@@ -1,8 +1,18 @@
-# ICPA Fundraising — version 0.5.1
+# ICPA Fundraising — version 0.7.0
 
 An installable WordPress donation plugin with general custom-amount giving and optional fundraising campaigns, organisers and donor accounts. All donations go to **one ICPA Square account**. ICPA approves campaigns and manages distribution; organisers cannot enter a different payment recipient.
 
 This is an initial implementation. WordPress flows and payment logic have automated coverage, but your Square profiles still need real account credentials and end-to-end sandbox testing before live use.
+
+## Card entry on your donation page (0.7.0)
+
+Enter the **Application ID** for each environment under **ICPA Donations → Square connections**. Copy it from that environment's Square Developer Dashboard Credentials page, not its Application secret. Application IDs and location IDs are public SDK identifiers; access tokens and webhook signature keys remain server-side. The matching Application ID enables embedded card entry for both general and campaign one-time donations, using the existing shortcodes. Blank Application ID retains hosted one-time checkout for backwards compatibility. Recurring giving continues to use Square-hosted checkout.
+
+The donation page must use HTTPS and allow Square's Web Payments SDK and secure card iframe. If a content security policy or optimisation plugin is installed, follow Square's current Web Payments SDK CSP requirements and exclude the Square/payment scripts from delayed loading. The plugin loads the Sandbox SDK (`sandbox.web.squarecdn.com`) or Production SDK (`web.squarecdn.com`) to match the active server environment. No raw card inputs or payment tokens are stored in the WordPress donation ledger. The SDK tokenizes with buyer-verification details before the server creates a Square order/payment and validates its response. Success is shown only for a confirmed completed payment; asynchronous payments remain pending.
+
+Start with Sandbox. Enter a custom amount and test card `4111 1111 1111 1111`, a future expiry, CVV `111` and postcode `2000` in the embedded form. Test successful and declined payments, campaign totals, refunds, webhook delivery and an interrupted connection before enabling Production. These account-specific tests have not been performed by the automated suite. For existing installs, upload the new ZIP and select **Replace current with uploaded**; saved credentials, campaigns and donation records are retained.
+
+During a payment retry, the form locks its amount/email and retains its single-use token and submission key; Square idempotency prevents a repeated request creating another payment. If a network error leaves confirmation uncertain, retry that same attempt or contact ICPA before starting another donation. A declined card requires reloading for a new attempt. The backend rate-limits requests, validates nonces/environment/amount/campaign status, and continues to process signed payment/refund webhooks. No OAuth redirect or Application secret is required.
 
 ## Included
 
@@ -13,7 +23,7 @@ This is an initial implementation. WordPress flows and payment logic have automa
 - Searchable campaign directory, cause filters, stories, goals and progress bars.
 - Campaign cover images through WordPress Featured Images, with bundled illustration fallbacks.
 - Signed-in organiser submissions, limited to five awaiting review. Every submission is pending until an ICPA administrator publishes it. Administrators manage later edits and closure.
-- One-time donations with suggested or custom amounts through Square hosted checkout.
+- One-time donations with suggested or custom amounts and embedded Square card entry when an Application ID is configured; hosted checkout remains available when it is blank.
 - WordPress donor/organiser accounts, native login, registration and password reset. Donor history is private to the signed-in account. Guest giving is supported; guest donations are not automatically attached to accounts by email.
 - Server-created checkout amounts, idempotent checkout submissions, signed webhooks and independent Square payment verification. A return from checkout never counts as payment confirmation.
 - Verified progress totals less refunds, separate sandbox/production totals, safeguards for duplicate/out-of-order events and failed payment retries. Processing fees are not deducted from displayed fundraising totals.
@@ -71,7 +81,7 @@ General donations are stored as **General donation** in the donation ledger and 
 
 ## Connect Square
 
-1. Go to **ICPA Donations → Square connections**. Save the Sandbox access token, location ID and webhook signature key. Save the Production profile separately when ready. Saving profiles does not switch checkout mode.
+1. Go to **ICPA Donations → Square connections**. Save the Sandbox Application ID, access token, location ID and webhook signature key. Save the Production profile separately when ready. Saving profiles does not switch checkout mode.
 2. In **ICPA Donations → Settings**, choose the active checkout environment and currency. The currency must match the Square location. Start with Sandbox. One site uses one currency; it is locked after the first checkout, including test checkouts.
 3. Register each environment's exact webhook URL shown in its profile. These use the WordPress REST routes `icpa/v1/square/webhook/sandbox` and `icpa/v1/square/webhook/production`. Copy the URL exactly, including any query string when pretty permalinks are off.
 4. Subscribe both environments to `payment.created`, `payment.updated`, `refund.created` and `refund.updated`. Callbacks are authenticated and processed using their own profile, even when the other environment is active for new checkouts. Sandbox records never count in production totals.
@@ -80,7 +90,7 @@ General donations are stored as **General donation** in the donation ledger and 
 
 Credentials are never echoed back into the admin form. Leave a secret field blank to keep its value, or tick its remove checkbox. Saved secrets use authenticated AES-256-GCM encryption with a key derived from WordPress authentication salts; the option is not autoloaded or exposed through the REST Settings API. PHP OpenSSL is required for storing credentials in the backend. Rotating WordPress authentication salts makes stored credentials unreadable until re-entered. Protect the site's configuration and database backups; encryption does not protect against a compromised WordPress server or administrator.
 
-Use HTTPS for the WordPress site, administration and publicly reachable webhook endpoint. WordPress security/CDN rules must allow Square webhook POSTs. API hosts are `connect.squareupsandbox.com` and `connect.squareup.com`. Required Square application/account permissions cover creating online checkout links and retrieving locations, orders and payments. The plugin pins Square API version `2025-01-23` and keeps TLS verification enabled.
+Use HTTPS for the WordPress site, administration and publicly reachable webhook endpoint. WordPress security/CDN rules must allow Square webhook POSTs. API hosts are `connect.squareupsandbox.com` and `connect.squareup.com`. Required Square application/account permissions cover creating payments and orders, creating online checkout links, and retrieving locations, orders and payments. The plugin pins Square API version `2025-01-23` and keeps TLS verification enabled.
 
 Advanced server configuration overrides saved profile credentials using constants or environment variables:
 

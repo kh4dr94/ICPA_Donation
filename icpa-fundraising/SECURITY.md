@@ -37,3 +37,9 @@ An independent review and actual Square sandbox checkout/webhook/refund/subscrip
 General donations, optional campaigns and recurring settings remain available. Recurring billing records/cancellations stay in Square; campaign totals cover verified one-time payments. Square locations remain configured per environment; campaign-specific location overrides are a separate feature and were not introduced in this security release.
 
 The original simple donation-link plugin also rejects raw/encoded control characters in URLs. It does not store Square API credentials or process payments itself.
+
+## Version 0.7.0 embedded-card update — 4 November 2026
+
+One-time card entry uses Square's Web Payments SDK iframe. Only a single-use token and selected donation fields reach the nonce-protected, rate-limited HTTPS-only WordPress AJAX handler. The handler binds the amount, currency, campaign and active environment to a local ledger row, creates a Square order and payment with stable idempotency keys, and uses the same strict payment-state validator as signed webhooks. Tokens are not persisted in the plugin database. Existing hosted checkout and recurring giving remain supported.
+
+Additional validation: 23 embedded-card WordPress integration checks with mocked Square responses cover separate public Application IDs, guest checkout, credentials absent from rendered markup, server-set amounts/location, completed-request replays, amount/environment tampering, malformed tokens, HTTPS, network retries, wrong provider amounts, nonce failures and hosted/embedded attempt separation. Browser checks with a mocked SDK cover verification details, retry identity, locked amounts, safe message rendering, completion and SDK load failure. Actual Square iframe rendering, account-specific SCA challenges and live transactions still require Sandbox validation on the installed HTTPS site.

@@ -48,17 +48,30 @@ final class ICPA_Views {
         if ( ! $campaign && ! ICPA_Recurring::options()['one_time'] && ! ICPA_Recurring::available() ) { return '<div class="icpa-info">No donation options are available right now. Please contact ICPA.</div>'; }
         $o = ICPA_Platform::options();
         $id = wp_unique_id( 'icpa-amount-' );
+        $profile = ICPA_Square_Settings::profile();
+        $embedded = ! empty( $profile['application_id'] );
+        if ( $embedded ) {
+            wp_enqueue_script( 'icpa-square-web', 'production' === $o['mode'] ? 'https://web.squarecdn.com/v1/square.js' : 'https://sandbox.web.squarecdn.com/v1/square.js', array(), null, true );
+            wp_enqueue_script( 'icpa-card-payment', plugins_url( 'assets/card-payment.js', ICPA_FUNDRAISING_FILE ), array( 'icpa-square-web' ), ICPA_Platform::VERSION, true );
+        }
         $return = $campaign ? get_permalink( $campaign ) : ( $o['general_page'] ? get_permalink( $o['general_page'] ) : home_url( '/' ) );
         ob_start();
         ?>
         <?php if ( $campaign || ICPA_Recurring::options()['one_time'] ) { ?>
-        <form action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" method="post" class="icpa-donation-form">
+        <form action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" method="post" class="icpa-donation-form"<?php if ( $embedded ) { ?> data-card-payment="1" data-app-id="<?php echo esc_attr( $profile['application_id'] ); ?>" data-location-id="<?php echo esc_attr( $profile['location_id'] ); ?>" data-currency="<?php echo esc_attr( $o['currency'] ); ?>" data-endpoint="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>"<?php } ?>>
             <input type="hidden" name="action" value="icpa_checkout"><input type="hidden" name="environment" value="<?php echo esc_attr( $o['mode'] ); ?>"><input type="hidden" name="campaign_id" value="<?php echo esc_attr( $campaign ); ?>"><input type="hidden" name="checkout_key" value="<?php echo esc_attr( wp_generate_uuid4() ); ?>"><?php wp_nonce_field( 'icpa_checkout' ); ?>
             <label for="<?php echo esc_attr( $id ); ?>">Your donation (<?php echo esc_html( $o['currency'] ); ?>)</label>
             <div class="icpa-amounts" aria-label="Suggested donation amounts"><?php foreach ( $o['suggested_amounts'] as $amount ) { if ( $amount < $o['minimum_amount'] || $amount > $o['maximum_amount'] ) { continue; } ?><button type="button" data-amount="<?php echo esc_attr( number_format( $amount / 100, $amount % 100 ? 2 : 0, '.', '' ) ); ?>" aria-pressed="false"><?php echo esc_html( number_format_i18n( $amount / 100, $amount % 100 ? 2 : 0 ) ); ?></button><?php } ?></div>
             <input id="<?php echo esc_attr( $id ); ?>" type="number" min="<?php echo esc_attr( number_format( $o['minimum_amount'] / 100, 2, '.', '' ) ); ?>" max="<?php echo esc_attr( number_format( $o['maximum_amount'] / 100, 2, '.', '' ) ); ?>" step="0.01" name="amount" required placeholder="Or enter your own amount" inputmode="decimal">
-            <button class="icpa-btn" type="submit">Donate</button>
-            <p class="icpa-small">One-time donation. You’ll complete payment on Square. <?php if ( ! is_user_logged_in() && $o['account_page'] ) { ?><a href="<?php echo esc_url( wp_login_url( $return ) ); ?>">Sign in first</a> to save it to your donor account.<?php } ?></p>
+            <?php if ( $embedded ) { ?>
+            <label for="<?php echo esc_attr( $id ); ?>-first">First name</label><input id="<?php echo esc_attr( $id ); ?>-first" name="first_name" autocomplete="given-name" maxlength="100" required>
+            <label for="<?php echo esc_attr( $id ); ?>-last">Last name</label><input id="<?php echo esc_attr( $id ); ?>-last" name="last_name" autocomplete="family-name" maxlength="100" required>
+            <label for="<?php echo esc_attr( $id ); ?>-email">Email</label><input id="<?php echo esc_attr( $id ); ?>-email" type="email" name="email" autocomplete="email" maxlength="254" required>
+            <span>Card details</span><div id="<?php echo esc_attr( $id ); ?>-card" class="icpa-card-container"></div>
+            <p class="icpa-card-status icpa-small" role="status" aria-live="polite">Loading secure card form…</p><noscript>JavaScript is required for secure card payments.</noscript>
+            <?php } ?>
+            <button class="icpa-btn" type="submit"<?php if ( $embedded ) { ?> disabled<?php } ?>>Donate</button>
+            <p class="icpa-small"><?php echo $embedded ? 'One-time donation. Card details are securely handled by Square.' : 'One-time donation. You’ll complete payment on Square.'; ?> <?php if ( ! is_user_logged_in() && $o['account_page'] ) { ?><a href="<?php echo esc_url( wp_login_url( $return ) ); ?>">Sign in first</a> to save it to your donor account.<?php } ?></p>
         </form>
         <?php } if ( ! $campaign ) { echo ICPA_Recurring::forms(); } ?>
         <?php return ob_get_clean();

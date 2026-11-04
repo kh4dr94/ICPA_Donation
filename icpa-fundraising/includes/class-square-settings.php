@@ -47,13 +47,16 @@ final class ICPA_Square_Settings {
         $mode = self::mode( $mode );
         $all = get_option( self::OPTION, array() );
         $saved = isset( $all[$mode] ) && is_array( $all[$mode] ) ? $all[$mode] : array();
-        $profile = array( 'location_id' => isset( $saved['location_id'] ) ? $saved['location_id'] : '', 'access_token' => '', 'signature_key' => '' );
+        $profile = array( 'location_id' => isset( $saved['location_id'] ) ? $saved['location_id'] : '', 'application_id' => isset( $saved['application_id'] ) ? $saved['application_id'] : '', 'access_token' => '', 'signature_key' => '' );
         foreach ( array( 'access_token' => 'ACCESS_TOKEN', 'signature_key' => 'WEBHOOK_SIGNATURE_KEY' ) as $field => $suffix ) {
             $server = ICPA_Square::secret( 'ICPA_SQUARE_' . strtoupper( $mode ) . '_' . $suffix );
             if ( '' === $server && $mode === ICPA_Platform::options()['mode'] ) { $server = ICPA_Square::secret( 'ICPA_SQUARE_' . $suffix ); }
             $profile[$field] = '' !== $server ? $server : self::decrypt( isset( $saved[$field] ) ? $saved[$field] : '', $mode . '|' . $field );
             if ( ! preg_match( '/\A[\x21-\x7e]{10,4096}\z/', $profile[$field] ) ) { $profile[$field] = ''; }
         }
+        $app = ICPA_Square::secret( 'ICPA_SQUARE_' . strtoupper( $mode ) . '_APPLICATION_ID' );
+        if ( '' !== $app ) { $profile['application_id'] = $app; }
+        if ( ! is_string( $profile['application_id'] ) || ! preg_match( '/\A[a-zA-Z0-9_-]{0,100}\z/', $profile['application_id'] ) ) { $profile['application_id'] = ''; }
         $location = ICPA_Square::secret( 'ICPA_SQUARE_' . strtoupper( $mode ) . '_LOCATION_ID' );
         if ( '' !== $location ) { $profile['location_id'] = $location; }
         if ( '' === $profile['location_id'] && $mode === ICPA_Platform::options()['mode'] ) { $profile['location_id'] = ICPA_Platform::options()['location_id']; }
@@ -69,6 +72,10 @@ final class ICPA_Square_Settings {
             if ( ! isset( $input[$mode] ) || ! is_array( $input[$mode] ) ) { continue; }
             $incoming = $input[$mode];
             $saved = isset( $profiles[$mode] ) && is_array( $profiles[$mode] ) ? $profiles[$mode] : array();
+            if ( isset( $incoming['application_id'] ) ) {
+                if ( ! is_string( $incoming['application_id'] ) || ! preg_match( '/\A[a-zA-Z0-9_-]{0,100}\z/', $incoming['application_id'] ) ) { return new WP_Error( 'application_invalid', 'Enter a valid Square Application ID. Previous profiles were kept.' ); }
+                $saved['application_id'] = $incoming['application_id'];
+            }
             if ( isset( $incoming['location_id'] ) ) {
                 if ( ! is_string( $incoming['location_id'] ) || ! preg_match( '/\A[a-zA-Z0-9_-]{0,100}\z/', $incoming['location_id'] ) ) { return new WP_Error( 'location_invalid', 'Enter a valid Square location ID. Previous profiles were kept.' ); }
                 $saved['location_id'] = $incoming['location_id'];
@@ -145,6 +152,7 @@ final class ICPA_Square_Settings {
         foreach ( array( 'sandbox', 'production' ) as $mode ) {
             $profile = self::profile( $mode );
             echo '<h2>' . esc_html( ucfirst( $mode ) ) . ( 'production' === $mode ? ' — real payments' : ' — test payments' ) . '</h2><table class="form-table"><tr><th><label for="' . esc_attr( $mode ) . '-location">Location ID</label></th><td><input id="' . esc_attr( $mode ) . '-location" class="regular-text" name="profiles[' . esc_attr( $mode ) . '][location_id]" value="' . esc_attr( $profile['location_id'] ) . '" autocomplete="off"></td></tr>';
+            echo '<tr><th><label for="' . esc_attr( $mode ) . '-application">Application ID</label></th><td><input id="' . esc_attr( $mode ) . '-application" class="regular-text" name="profiles[' . esc_attr( $mode ) . '][application_id]" value="' . esc_attr( $profile['application_id'] ) . '" autocomplete="off"><p class="description">Use the matching environment’s Application ID from Square Developer Dashboard → Credentials. Enables card entry on your donation page (HTTPS required). This is not the Application secret. Blank keeps one-time checkout hosted on Square. Recurring gifts remain hosted on Square.</p></td></tr>';
             foreach ( array( 'access_token' => 'Access token', 'signature_key' => 'Webhook signature key' ) as $field => $label ) {
                 echo '<tr><th><label for="' . esc_attr( $mode . '-' . $field ) . '">' . esc_html( $label ) . '</label></th><td><input type="password" id="' . esc_attr( $mode . '-' . $field ) . '" class="regular-text" name="profiles[' . esc_attr( $mode ) . '][' . esc_attr( $field ) . ']" value="" autocomplete="new-password"><p class="description">' . ( $profile[$field] ? 'Configured' : 'Not configured (or encrypted value could not be opened)' ) . '</p><label><input type="checkbox" name="profiles[' . esc_attr( $mode ) . '][clear_' . esc_attr( $field ) . ']" value="1"> Remove saved credential (server overrides remain)</label></td></tr>';
             }

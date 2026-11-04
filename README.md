@@ -2,13 +2,13 @@
 
 ## Download and install
 
-Version 0.6.1 groups campaign management, causes, donations and settings under one **ICPA Donations** WordPress menu.
+Version 0.7.0 adds embedded Square card entry for one-time donations when a matching Application ID is configured. Recurring gifts continue to use Square-hosted checkout. It groups campaign management, causes, donations and settings under one **ICPA Donations** WordPress menu.
 
 [Download the ICPA Fundraising plugin ZIP](https://github.com/kh4dr94/ICPA_Donation/raw/refs/heads/main/icpa-fundraising.zip), then upload it in WordPress under **Plugins → Add New → Upload Plugin** and activate it. Upload this plugin ZIP, rather than GitHub's source-code ZIP of the whole repository.
 
 The repository now contains two WordPress plugins:
 
-- **[ICPA Fundraising](icpa-fundraising/README.md)**: the donation plugin with optional campaigns (v0.6), including organiser submissions, donor accounts, Square hosted checkout integration and verified fundraising totals. Upload `icpa-fundraising.zip`. Square credentials and end-to-end sandbox validation are still required before taking live donations.
+- **[ICPA Fundraising](icpa-fundraising/README.md)**: the donation plugin with optional campaigns (v0.7), including organiser submissions, donor accounts, Square hosted checkout integration and verified fundraising totals. Upload `icpa-fundraising.zip`. Square credentials and end-to-end sandbox validation are still required before taking live donations.
 - **ICPA Square Donations**: the original simple donation-link button described below. Upload `icpa-square-donations.zip` if you only need a button linking to an existing Square payment link.
 
 Open [the interactive platform preview](preview/fundraising-platform.html) in your browser to try general giving, campaign browsing, a sample submission, a demo donor account and the WordPress general, Square and recurring settings screens. No preview action saves real settings or processes a payment. Sample data and simulated actions are labelled throughout. Desktop, campaign and mobile screenshots are in `preview/`.
